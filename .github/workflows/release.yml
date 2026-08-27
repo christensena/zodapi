@@ -29,8 +29,7 @@ jobs:
       # Publishing stays local: `pnpm changeset:publish` prompts for the npm OTP.
       - uses: changesets/action@v2
         with:
-          version: pnpm changeset:version
-          title: 'chore: version packages'
-          commit: 'chore: version packages'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          version-script: pnpm changeset:version
+          pr-title: 'chore: version packages'
+          commit-message: 'chore: version packages'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
