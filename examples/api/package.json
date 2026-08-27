@@ -1,0 +1,26 @@
+{
+  "name": "@zodapi/example-api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Example shared API contract (routes) consumed by both server and client",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hono/zod-openapi": "^1.6.1",
+    "@zodapi/core": "workspace:*",
+    "@zodapi/hono": "workspace:*",
+    "hono": "^4.13.0",
+    "zod": "^4.4.3"
+  }
+}

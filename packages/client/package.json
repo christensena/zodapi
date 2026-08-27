@@ -1,0 +1,45 @@
+{
+  "name": "@zodapi/client",
+  "version": "0.1.0",
+  "description": "Typed fetch/axios client over zodapi route contracts with optional zod validation",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./axios": {
+      "types": "./dist/axios.d.ts",
+      "default": "./dist/axios.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@zodapi/core": "workspace:*"
+  },
+  "peerDependencies": {
+    "axios": "^1.0.0",
+    "zod": "^4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "axios": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@hono/node-server": "^1.19.0",
+    "@hono/zod-openapi": "^1.6.1",
+    "@zodapi/hono": "workspace:*",
+    "axios": "^1.11.0",
+    "hono": "^4.13.0",
+    "zod": "^4.4.3"
+  }
+}

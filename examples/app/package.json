@@ -1,0 +1,27 @@
+{
+  "name": "@zodapi/example-app",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Example Hono API server using @zodapi/hono, runnable locally",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "start": "tsx src/main.ts",
+    "typecheck": "tsc --noEmit",
+    "client-demo": "tsx src/client-demo.ts"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.19.0",
+    "@hono/zod-openapi": "^1.6.1",
+    "@zodapi/client": "workspace:*",
+    "@zodapi/core": "workspace:*",
+    "@zodapi/example-api": "workspace:*",
+    "@zodapi/hono": "workspace:*",
+    "hono": "^4.13.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.4.0",
+    "tsx": "^4.20.0"
+  }
+}
