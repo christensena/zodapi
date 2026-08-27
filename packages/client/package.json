@@ -2,6 +2,7 @@
   "name": "@zodapi/client",
   "version": "0.1.0",
   "description": "Typed fetch/axios client over zodapi route contracts with optional zod validation",
+  "license": "MIT",
   "files": [
     "dist"
   ],

@@ -1,6 +1,7 @@
 {
   "name": "zodapi-monorepo",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "build": "pnpm -r run build",
@@ -9,9 +10,13 @@
     "lint": "oxlint .",
     "format": "oxfmt .",
     "format:check": "oxfmt --check .",
-    "dev": "pnpm --filter @zodapi/example-app run dev"
+    "dev": "pnpm --filter @zodapi/example-app run dev",
+    "changeset": "changeset",
+    "changeset:version": "changeset version",
+    "changeset:publish": "pnpm run build && changeset publish"
   },
   "devDependencies": {
+    "@changesets/cli": "^3.0.1",
     "oxfmt": "^0.65.0",
     "oxlint": "^1.80.0",
     "typescript": "^7.0.2",
