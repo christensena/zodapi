@@ -35,6 +35,9 @@ importers:
       '@changesets/cli':
         specifier: ^3.0.1
         version: 3.0.1
+      '@types/node':
+        specifier: 'catalog:'
+        version: 26.4.0
       oxfmt:
         specifier: ^0.65.0
         version: 0.65.0
@@ -124,6 +127,30 @@ importers:
       hono:
         specifier: 'catalog:'
         version: 4.13.5
+      zod:
+        specifier: 'catalog:'
+        version: 4.4.3
+
+  packages/codegen:
+    devDependencies:
+      '@hono/zod-openapi':
+        specifier: 'catalog:'
+        version: 1.6.1(hono@4.13.5)(zod@4.4.3)
+      '@types/node':
+        specifier: 'catalog:'
+        version: 26.4.0
+      '@zodapi/core':
+        specifier: workspace:*
+        version: link:../core
+      '@zodapi/hono':
+        specifier: workspace:*
+        version: link:../hono
+      hono:
+        specifier: 'catalog:'
+        version: 4.13.5
+      tsx:
+        specifier: 'catalog:'
+        version: 4.23.12
       zod:
         specifier: 'catalog:'
         version: 4.4.3

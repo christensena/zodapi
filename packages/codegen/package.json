@@ -1,0 +1,36 @@
+{
+  "name": "@zodapi/codegen",
+  "version": "0.1.0",
+  "description": "Generate a zodapi contract (zod schemas + route defs) from an OpenAPI 3.1 document",
+  "license": "MIT",
+  "bin": {
+    "zodapi-codegen": "./dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "generate:fixture": "tsx scripts/generate-fixture.ts"
+  },
+  "devDependencies": {
+    "@hono/zod-openapi": "catalog:",
+    "@types/node": "catalog:",
+    "@zodapi/core": "workspace:*",
+    "@zodapi/hono": "workspace:*",
+    "hono": "catalog:",
+    "tsx": "catalog:",
+    "zod": "catalog:"
+  }
+}
