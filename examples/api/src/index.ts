@@ -15,13 +15,19 @@ export const NewUser = User.omit({ id: true }).openapi('NewUser')
 export type NewUser = z.infer<typeof NewUser>
 
 export const NotFound = z
-  .object({ error: z.object({ code: z.literal('NOT_FOUND'), message: z.string() }) })
+  .object({
+    error: z.object({ code: z.literal('NOT_FOUND'), message: z.string() }),
+  })
   .openapi('NotFound')
 export type NotFound = z.infer<typeof NotFound>
 
 export const Conflict = z
   .object({
-    error: z.object({ code: z.literal('CONFLICT'), message: z.string(), existingId: z.string() }),
+    error: z.object({
+      code: z.literal('CONFLICT'),
+      message: z.string(),
+      existingId: z.string(),
+    }),
   })
   .openapi('Conflict')
 export type Conflict = z.infer<typeof Conflict>
@@ -96,10 +102,6 @@ export const deleteUser = route({
   },
   responses: {
     204: { description: 'Deleted' },
-    404: {
-      description: 'No user with that id',
-      content: { 'application/json': { schema: NotFound } },
-    },
   },
 })
 

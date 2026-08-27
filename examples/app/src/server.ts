@@ -4,8 +4,18 @@ import { createApp } from '@zodapi/hono'
 
 const users = new Map<string, User>(
   [
-    { id: '1', name: 'Ada Lovelace', email: 'ada@example.com', tags: ['math', 'pioneer'] },
-    { id: '2', name: 'Grace Hopper', email: 'grace@example.com', tags: ['compilers'] },
+    {
+      id: '1',
+      name: 'Ada Lovelace',
+      email: 'ada@example.com',
+      tags: ['math', 'pioneer'],
+    },
+    {
+      id: '2',
+      name: 'Grace Hopper',
+      email: 'grace@example.com',
+      tags: ['compilers'],
+    },
   ].map((u) => [u.id, u]),
 )
 
@@ -46,10 +56,9 @@ export const app = createApp()
   })
   .openapi(api.deleteUser, (c) => {
     const { id } = c.req.valid('param')
-    if (!users.has(id)) {
-      return c.json({ error: { code: 'NOT_FOUND' as const, message: `No user ${id}` } }, 404)
+    if (users.has(id)) {
+      users.delete(id)
     }
-    users.delete(id)
     return new Response(null, { status: 204 })
   })
   .doc31('/openapi.json', {

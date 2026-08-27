@@ -2,7 +2,7 @@ import { serve } from '@hono/node-server'
 
 import { app } from './server.js'
 
-const port = Number(process.env.PORT ?? 3000)
+const port = Number(process.env.PORT ?? 3321)
 
 serve({ fetch: app.fetch, port }, (info) => {
   console.log(`zodapi example API listening on http://localhost:${info.port}`)
