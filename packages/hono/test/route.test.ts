@@ -46,6 +46,51 @@ describe('route()', () => {
     expect(optional.request?.body?.required).toBe(false)
   })
 
+  it('throws when a path param is missing from the params schema', () => {
+    const bad: unknown = {
+      method: 'get',
+      path: '/items/{id}',
+      responses: { 200: { description: 'ok' } },
+    }
+    expect(() => route(bad as never)).toThrow(
+      "route(): params do not match path '/items/{id}' (get): missing from params schema: id",
+    )
+  })
+
+  it('throws when the params schema declares keys not in the path', () => {
+    const bad: unknown = {
+      method: 'get',
+      path: '/items/{id}',
+      request: { params: z.object({ userId: z.string() }) },
+      responses: { 200: { description: 'ok' } },
+    }
+    expect(() => route(bad as never)).toThrow(
+      "route(): params do not match path '/items/{id}' (get): missing from params schema: id; not in path: userId",
+    )
+  })
+
+  it('skips the params check for schemas whose keys are not knowable', () => {
+    for (const params of [z.record(z.string(), z.string()), z.looseObject({})]) {
+      const config: unknown = {
+        method: 'get',
+        path: '/items/{id}',
+        request: { params },
+        responses: { 200: { description: 'ok' } },
+      }
+      expect(() => route(config as never)).not.toThrow()
+    }
+  })
+
+  it('treats an empty params schema as declaring no params', () => {
+    const bad: unknown = {
+      method: 'get',
+      path: '/items/{id}',
+      request: { params: z.object({}) },
+      responses: { 200: { description: 'ok' } },
+    }
+    expect(() => route(bad as never)).toThrow('missing from params schema: id')
+  })
+
   it('carries the alias through', () => {
     const r = route({
       alias: 'listItems',
