@@ -1,4 +1,3 @@
-import { describe, expect, it } from 'vitest'
 import {
   ApiError,
   RequestValidationError,
@@ -11,6 +10,8 @@ import {
   isValidationError,
   matchErrorByStatus,
 } from '@zodapi/client'
+import { describe, expect, it } from 'vitest'
+
 import { createThing, getThing, makeApp, routes } from './contract.js'
 
 function makeClient(counters = { createCalls: 0 }) {

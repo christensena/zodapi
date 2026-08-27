@@ -1,9 +1,10 @@
 import { serve, type ServerType } from '@hono/node-server'
-import axios from 'axios'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createClient, isErrorFromRoute } from '@zodapi/client'
 import { axiosAdapter } from '@zodapi/client/axios'
 import { isAxiosErrorFromRoute } from '@zodapi/core'
+import axios from 'axios'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+
 import { getThing, makeApp, routes } from './contract.js'
 
 let server: ServerType

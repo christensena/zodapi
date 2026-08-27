@@ -2,6 +2,9 @@
   "name": "@zodapi/hono",
   "version": "0.1.0",
   "description": "Thin preset over @hono/zod-openapi: fixed 400 validation error shape and route helper",
+  "files": [
+    "dist"
+  ],
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -11,9 +14,6 @@
       "default": "./dist/index.js"
     }
   },
-  "files": [
-    "dist"
-  ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit"
@@ -21,14 +21,14 @@
   "dependencies": {
     "@zodapi/core": "workspace:*"
   },
-  "peerDependencies": {
-    "@hono/zod-openapi": "^1.6.0",
-    "hono": ">=4.10.0",
-    "zod": "^4.0.0"
-  },
   "devDependencies": {
-    "@hono/zod-openapi": "^1.6.1",
-    "hono": "^4.13.0",
-    "zod": "^4.4.3"
+    "@hono/zod-openapi": "catalog:",
+    "hono": "catalog:",
+    "zod": "catalog:"
+  },
+  "peerDependencies": {
+    "@hono/zod-openapi": "catalog:peers",
+    "hono": "catalog:peers",
+    "zod": "catalog:peers"
   }
 }

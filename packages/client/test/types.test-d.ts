@@ -1,7 +1,8 @@
-import { describe, expectTypeOf, it } from 'vitest'
 import { createClient, type ApiErrorOf, matchErrorByStatus, isErrorFromRoute } from '@zodapi/client'
 import type { SuccessData, ErrorVariant } from '@zodapi/core'
 import type { ValidationError } from '@zodapi/core'
+import { describe, expectTypeOf, it } from 'vitest'
+
 import { createThing, getThing, routes, teapot } from './contract.js'
 
 const client = createClient(routes, { baseUrl: 'http://test.local' })

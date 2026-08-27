@@ -1,6 +1,6 @@
-import { createApp } from '@zodapi/hono'
 import * as api from '@zodapi/example-api'
 import type { User } from '@zodapi/example-api'
+import { createApp } from '@zodapi/hono'
 
 const users = new Map<string, User>(
   [

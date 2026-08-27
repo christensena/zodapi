@@ -2,6 +2,9 @@
   "name": "@zodapi/core",
   "version": "0.1.0",
   "description": "Shared contract types, fixed validation-error shape, and typed error guards for zodapi",
+  "files": [
+    "dist"
+  ],
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -11,17 +14,14 @@
       "default": "./dist/index.js"
     }
   },
-  "files": [
-    "dist"
-  ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit"
   },
-  "peerDependencies": {
-    "zod": "^4.0.0"
-  },
   "devDependencies": {
-    "zod": "^4.4.3"
+    "zod": "catalog:"
+  },
+  "peerDependencies": {
+    "zod": "catalog:peers"
   }
 }

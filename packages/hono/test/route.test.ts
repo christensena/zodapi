@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
 import { createApp, route, validationErrorResponse, z } from '@zodapi/hono'
+import { describe, expect, it } from 'vitest'
 
 const Item = z.object({ id: z.string() })
 

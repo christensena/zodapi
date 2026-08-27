@@ -8,6 +8,7 @@ import {
   type RouteDef,
 } from '@zodapi/core'
 import type { z } from 'zod'
+
 import { fetchAdapter, type Adapter } from './adapter.js'
 import type { ValidateMode, ZodapiClient } from './types.js'
 
@@ -22,7 +23,8 @@ export interface ClientOptions {
   validate?: ValidateMode
   /** Headers sent with every request; a function is re-evaluated per call. */
   headers?:
-    Record<string, string> | (() => Record<string, string> | Promise<Record<string, string>>)
+    | Record<string, string>
+    | (() => Record<string, string> | Promise<Record<string, string>>)
 }
 
 interface AnyArgs {

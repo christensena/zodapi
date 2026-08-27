@@ -1,5 +1,5 @@
-import type { z } from 'zod'
 import type { JsonBodySchema, Method, RouteDef, SuccessData } from '@zodapi/core'
+import type { z } from 'zod'
 
 export type ValidateMode = 'none' | 'request' | 'response' | 'both'
 

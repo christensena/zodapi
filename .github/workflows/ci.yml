@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: jdx/mise-action@v4
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm run format:check
+
+      - run: pnpm run lint
+
+      # Packages resolve each other through dist, so build before checking.
+      - run: pnpm run build
+
+      - run: pnpm run typecheck
+
+      - run: pnpm run test

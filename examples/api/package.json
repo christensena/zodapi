@@ -17,10 +17,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@hono/zod-openapi": "^1.6.1",
+    "@hono/zod-openapi": "catalog:",
     "@zodapi/core": "workspace:*",
     "@zodapi/hono": "workspace:*",
-    "hono": "^4.13.0",
-    "zod": "^4.4.3"
+    "hono": "catalog:",
+    "zod": "catalog:"
   }
 }

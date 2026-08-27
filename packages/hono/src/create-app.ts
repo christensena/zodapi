@@ -1,6 +1,6 @@
 import { OpenAPIHono, type OpenAPIHonoOptions } from '@hono/zod-openapi'
-import type { Env, Hono } from 'hono'
 import { validationErrorBody } from '@zodapi/core'
+import type { Env, Hono } from 'hono'
 
 /**
  * Rewrites `a[]=1&a[]=2` query keys to `a=1&a=2` at the edge so contract
