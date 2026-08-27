@@ -19,6 +19,11 @@ const users = new Map<string, User>(
   ].map((u) => [u.id, u]),
 )
 
+export const openApiDoc = {
+  openapi: '3.1.0',
+  info: { title: 'zodapi example API', version: '0.1.0' },
+} as const
+
 export const app = createApp()
   .openapi(api.listUsers, (c) => {
     const { q, limit, tags } = c.req.valid('query')
@@ -61,9 +66,6 @@ export const app = createApp()
     }
     return new Response(null, { status: 204 })
   })
-  .doc31('/openapi.json', {
-    openapi: '3.1.0',
-    info: { title: 'zodapi example API', version: '0.1.0' },
-  })
+  .doc31('/openapi.json', openApiDoc)
 
 export type App = typeof app
