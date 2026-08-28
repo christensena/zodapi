@@ -322,16 +322,31 @@ describe('date codecs', () => {
     expect(sentBody(calls)).toEqual({ at: '2024-01-02T03:04:05.000Z' })
   })
 
-  it('rejects encodeRequests without request validation on a codec-bearing schema', async () => {
+  it('encodes without request validation — encoding is a serialization concern', async () => {
     const { adapter, calls } = stubAdapter(201)
     const client = createClient(codecRoutes, {
       baseUrl: 'http://test.local',
       adapter,
       encodeRequests: true, // validate defaults to 'response'
     })
-    await expect(
-      client.createEvent({ body: { at: new Date('2024-01-02T03:04:05Z') } }),
-    ).rejects.toThrow(/requires request validation/)
+    await client.createEvent({
+      body: { at: new Date('2024-01-02T03:04:05Z'), day: new Date('2024-01-02T00:00:00Z') },
+    })
+    expect(sentBody(calls)).toEqual({ at: '2024-01-02T03:04:05.000Z', day: '2024-01-02' })
+  })
+
+  it('throws RequestValidationError on encode failure even without request validation', async () => {
+    const { adapter, calls } = stubAdapter(201)
+    const client = createClient(codecRoutes, {
+      baseUrl: 'http://test.local',
+      adapter,
+      validate: 'response',
+      encodeRequests: true,
+    })
+    const err = await client
+      .createEvent({ body: { at: 'not-a-date' as unknown as Date } })
+      .catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(RequestValidationError)
     expect(calls).toHaveLength(0)
   })
 
@@ -347,6 +362,121 @@ describe('date codecs', () => {
       .createEvent({ body: { at: 'not-a-date' as unknown as Date } })
       .catch((e: unknown) => e)
     expect(err).toBeInstanceOf(RequestValidationError)
+    expect(calls).toHaveLength(0)
+  })
+})
+
+describe('onError retry hook', () => {
+  const thing = { id: '1', name: 'one' }
+
+  function sequencedAdapter(responses: Array<{ status: number; body?: unknown } | Error>) {
+    const calls: AdapterRequest[] = []
+    const adapter: Adapter = (request) => {
+      calls.push(request)
+      const next = responses[Math.min(calls.length - 1, responses.length - 1)]
+      if (next instanceof Error) return Promise.reject(next)
+      return Promise.resolve({
+        status: next?.status ?? 200,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        text: JSON.stringify(next?.body ?? {}),
+      })
+    }
+    return { adapter, calls }
+  }
+
+  it('retries with refreshed headers after a 401', async () => {
+    const { adapter, calls } = sequencedAdapter([{ status: 401 }, { status: 200, body: thing }])
+    let token = 'expired'
+    const client = createClient(routes, {
+      baseUrl: 'http://test.local',
+      adapter,
+      headers: () => ({ authorization: `Bearer ${token}` }),
+      onError: ({ error, attempt }) => {
+        if (error instanceof ApiError && error.status === 401 && attempt === 1) {
+          token = 'fresh'
+          return 'retry'
+        }
+      },
+    })
+    const result = await client.getThing({ params: { id: '1' } })
+    expect(result).toEqual(thing)
+    expect(calls.map((c) => c.headers['authorization'])).toEqual(['Bearer expired', 'Bearer fresh'])
+  })
+
+  it('rethrows the original error when the hook does not return retry', async () => {
+    const { adapter, calls } = sequencedAdapter([{ status: 500 }])
+    const seen: number[] = []
+    const client = createClient(routes, {
+      baseUrl: 'http://test.local',
+      adapter,
+      onError: ({ attempt }) => {
+        seen.push(attempt)
+      },
+    })
+    await expect(client.getThing({ params: { id: '1' } })).rejects.toBeInstanceOf(ApiError)
+    expect(seen).toEqual([1])
+    expect(calls).toHaveLength(1)
+  })
+
+  it('bounds retries via the attempt counter', async () => {
+    const { adapter, calls } = sequencedAdapter([{ status: 500 }])
+    const client = createClient(routes, {
+      baseUrl: 'http://test.local',
+      adapter,
+      onError: ({ attempt }) => (attempt <= 2 ? 'retry' : undefined),
+    })
+    await expect(client.getThing({ params: { id: '1' } })).rejects.toBeInstanceOf(ApiError)
+    expect(calls).toHaveLength(3)
+  })
+
+  it('a per-call hook replaces the client-level one', async () => {
+    const { adapter } = sequencedAdapter([{ status: 500 }])
+    let clientLevelCalled = false
+    const client = createClient(routes, {
+      baseUrl: 'http://test.local',
+      adapter,
+      onError: () => {
+        clientLevelCalled = true
+        return 'retry'
+      },
+    })
+    await expect(
+      client.getThing({ params: { id: '1' }, onError: () => undefined }),
+    ).rejects.toBeInstanceOf(ApiError)
+    expect(clientLevelCalled).toBe(false)
+  })
+
+  it('retries network errors from the adapter', async () => {
+    const { adapter, calls } = sequencedAdapter([
+      new Error('socket hang up'),
+      { status: 200, body: thing },
+    ])
+    const client = createClient(routes, {
+      baseUrl: 'http://test.local',
+      adapter,
+      onError: ({ attempt }) => (attempt === 1 ? 'retry' : undefined),
+    })
+    await expect(client.getThing({ params: { id: '1' } })).resolves.toEqual(thing)
+    expect(calls).toHaveLength(2)
+  })
+
+  it('does not consult the hook for client-side request validation failures', async () => {
+    const { adapter, calls } = sequencedAdapter([{ status: 201, body: thing }])
+    let hookCalled = false
+    const client = createClient(routes, {
+      baseUrl: 'http://test.local',
+      adapter,
+      validate: 'both',
+      onError: () => {
+        hookCalled = true
+        return 'retry'
+      },
+    })
+    const err = await client
+      .createThing({ body: { name: 123 as unknown as string } })
+      .catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(RequestValidationError)
+    expect(hookCalled).toBe(false)
     expect(calls).toHaveLength(0)
   })
 })

@@ -3,7 +3,9 @@ export { fetchAdapter, type Adapter, type AdapterRequest, type AdapterResponse }
 export type {
   AliasCallers,
   ArgsTuple,
+  ErrorContext,
   MethodCallers,
+  OnError,
   RequestArgs,
   RequestIO,
   ValidateMode,

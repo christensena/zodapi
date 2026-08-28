@@ -3,6 +3,52 @@ import type { z } from 'zod'
 
 export type ValidateMode = 'none' | 'request' | 'response' | 'both'
 
+/** What an {@link OnError} hook receives when a call is about to throw. */
+export interface ErrorContext {
+  /**
+   * The error that will be thrown if the hook does not return `'retry'`: a
+   * transport/network error from the adapter, an `ApiError` (or subclass:
+   * `UnexpectedResponseApiError`, `ValidationApiError`, `ProblemApiError`), or
+   * a `ResponseValidationError`. Narrow with `instanceof` before deciding.
+   */
+  error: unknown
+  /** The route definition of the failing call. */
+  route: RouteDef
+  /** The route's alias, when it has one. */
+  alias: string | undefined
+  /**
+   * How many attempts have failed so far, starting at 1. There is no built-in
+   * cap — use this to bound retries (e.g. `attempt === 1` for a single retry).
+   */
+  attempt: number
+}
+
+/**
+ * Error hook with a retry decision.
+ *
+ * Called whenever a call is about to throw (may be async). Return `'retry'`
+ * to re-run the request; any other return value — or a throw from the hook
+ * itself — lets the original error propagate. The literal return type leaves
+ * room for future decisions without a breaking change.
+ *
+ * The client re-evaluates a `headers` function on every attempt, so the
+ * refresh-token flow is just:
+ *
+ * ```ts
+ * onError: async ({ error, attempt }) => {
+ *   if (error instanceof ApiError && error.status === 401 && attempt === 1) {
+ *     await refreshTokens() // headers() picks up the new token on the retry
+ *     return 'retry'
+ *   }
+ * }
+ * ```
+ *
+ * Client-side request validation/encoding failures
+ * (`RequestValidationError`) are thrown before the hook and never retried —
+ * the same input would fail the same way again.
+ */
+export type OnError = (context: ErrorContext) => 'retry' | void | Promise<'retry' | void>
+
 /**
  * Which side of the request schemas the caller supplies: 'input' (wire form,
  * the default) or 'output' (decoded form, when `encodeRequests` is on — e.g.
@@ -49,6 +95,11 @@ type BaseArgs<R extends RouteDef, M extends RequestIO> = ParamsArg<R, M> &
     signal?: AbortSignal
     /** Override the client-level validation mode for this call. */
     validate?: ValidateMode
+    /**
+     * Error hook for this call, replacing any client-level `onError`. Return
+     * `'retry'` to re-run the request — see {@link OnError}.
+     */
+    onError?: OnError
   }
 
 type EncodeFlag<M extends RequestIO> = M extends 'output' ? true : false

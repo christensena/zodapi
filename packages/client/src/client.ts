@@ -15,7 +15,7 @@ import {
 import { z } from 'zod'
 
 import { fetchAdapter, type Adapter } from './adapter.js'
-import type { ValidateMode, ZodapiClient } from './types.js'
+import type { OnError, ValidateMode, ZodapiClient } from './types.js'
 
 export interface ClientOptions {
   baseUrl: string
@@ -41,12 +41,40 @@ export interface ClientOptions {
    * Supply request data in decoded (schema output) form — e.g. `Date` objects
    * where the contract uses date codecs — and let the client encode it to the
    * wire form with `z.encode`. Request args are then typed with `z.output`
-   * instead of `z.input`. Codec-bearing request schemas additionally require
-   * request validation ('request' or 'both'). Overridable per call. Note:
-   * `z.encode` rejects one-way transforms, so a schema mixing a codec with
-   * e.g. `queryArray()` cannot be encoded.
+   * instead of `z.input`. Encoding is a serialization concern, independent of
+   * `validate`: codec-bearing request data is always encoded (and `z.encode`
+   * validates as it encodes, so an invalid value throws
+   * `RequestValidationError` even with `validate: 'none'`). Overridable per
+   * call. Note: `z.encode` rejects one-way transforms, so a schema mixing a
+   * codec with e.g. `queryArray()` cannot be encoded.
    */
   encodeRequests?: boolean
+  /**
+   * Error hook with a retry decision, called whenever a call is about to
+   * throw. Return `'retry'` (may be async) to re-run the request; any other
+   * return value — or a throw from the hook itself — lets the original error
+   * propagate.
+   *
+   * The hook receives the error, the route (and alias), and the 1-based
+   * `attempt` count. It covers transport/network errors, `ApiError` and its
+   * subclasses, and `ResponseValidationError`; client-side request
+   * validation/encoding failures are thrown before the hook and never
+   * retried. A `headers` function is re-evaluated on every attempt, which
+   * makes token refresh a one-liner:
+   *
+   * ```ts
+   * onError: async ({ error, attempt }) => {
+   *   if (error instanceof ApiError && error.status === 401 && attempt === 1) {
+   *     await refreshTokens() // headers() picks up the new token on the retry
+   *     return 'retry'
+   *   }
+   * }
+   * ```
+   *
+   * There is no built-in attempt cap — bound retries with `attempt`. A
+   * per-call `onError` replaces this one for that call.
+   */
+  onError?: OnError
 }
 
 interface AnyArgs {
@@ -57,6 +85,7 @@ interface AnyArgs {
   signal?: AbortSignal | undefined
   validate?: ValidateMode | undefined
   encodeRequests?: boolean | undefined
+  onError?: OnError | undefined
 }
 
 function serializeQueryValue(value: unknown): string {
@@ -122,6 +151,7 @@ export function createClient<const Rs extends readonly RouteDef[], const O exten
   const call = async (route: RouteDef, args: AnyArgs = {}): Promise<unknown> => {
     const validate = args.validate ?? defaultValidate
     const encodeRequests = args.encodeRequests ?? defaultEncodeRequests
+    const onError = args.onError ?? options.onError
     const validateRequest = validate === 'request' || validate === 'both'
     const validateResponse = validate === 'response' || validate === 'both'
 
@@ -133,25 +163,20 @@ export function createClient<const Rs extends readonly RouteDef[], const O exten
       value: T,
     ): T => {
       if (!schema) return value
-      const hasCodec = schemaContainsCodec(schema)
-      if (!validateRequest) {
-        if (encodeRequests && hasCodec) {
-          throw new Error(
-            `Request ${target} schema for ${route.method.toUpperCase()} ${route.path} contains a codec; ` +
-              `'encodeRequests' requires request validation (validate: 'request' or 'both')`,
-          )
-        }
-        return value
+      // The wire form of a codec is its input side, so codec-bearing values
+      // need z.encode regardless of the validate mode — JSON.stringify would
+      // serialize e.g. a date-only codec's Date as a full datetime.
+      if (encodeRequests && schemaContainsCodec(schema)) {
+        const encoded = z.safeEncode(schema, value as never)
+        if (!encoded.success) throw new RequestValidationError(target, encoded.error)
+        return encoded.data as T
       }
-      if (hasCodec) {
-        // The wire form is the codec's input side: encode decoded values
-        // directly, or re-encode after parsing so e.g. a date-only codec is not
-        // serialized by JSON.stringify as a full datetime.
-        const decoded = encodeRequests
-          ? { success: true as const, data: value }
-          : schema.safeParse(value)
-        if (!decoded.success) throw new RequestValidationError(target, decoded.error)
-        const encoded = z.safeEncode(schema, decoded.data as never)
+      if (!validateRequest) return value
+      if (schemaContainsCodec(schema)) {
+        // Parsing decodes; re-encode so the wire keeps the codec input form.
+        const parsed = schema.safeParse(value)
+        if (!parsed.success) throw new RequestValidationError(target, parsed.error)
+        const encoded = z.safeEncode(schema, parsed.data as never)
         if (!encoded.success) throw new RequestValidationError(target, encoded.error)
         return encoded.data as T
       }
@@ -160,6 +185,8 @@ export function createClient<const Rs extends readonly RouteDef[], const O exten
       return result.data as T
     }
 
+    // Serialization happens once, outside the retry loop: the same input
+    // cannot fail differently on a retry, so these errors never reach onError.
     const request = route.request ?? {}
     const params = parseInput('param', request.params, args.params) as AnyArgs['params']
     const query = parseInput('query', request.query, args.query) as AnyArgs['query']
@@ -167,65 +194,77 @@ export function createClient<const Rs extends readonly RouteDef[], const O exten
     parseInput('header', headerSchema, args.headers)
     const bodySchema = jsonBodySchema(route)
     const body = bodySchema !== undefined ? parseInput('json', bodySchema, args.body) : args.body
-
-    const headers: Record<string, string> = {}
-    const baseHeaders =
-      typeof options.headers === 'function' ? await options.headers() : options.headers
-    Object.assign(headers, baseHeaders)
-    for (const [key, value] of Object.entries(args.headers ?? {})) {
-      if (value !== undefined) headers[key] = value
-    }
     const hasBody = body !== undefined
-    if (hasBody && !Object.keys(headers).some((h) => h.toLowerCase() === 'content-type')) {
-      headers['content-type'] = 'application/json'
-    }
 
-    const response = await adapter({
-      method: route.method,
-      url: buildUrl(options.baseUrl, route, { ...args, params, query }),
-      headers,
-      body: hasBody ? JSON.stringify(body) : undefined,
-      signal: args.signal,
-    })
+    const attemptOnce = async (): Promise<unknown> => {
+      const headers: Record<string, string> = {}
+      const baseHeaders =
+        typeof options.headers === 'function' ? await options.headers() : options.headers
+      Object.assign(headers, baseHeaders)
+      for (const [key, value] of Object.entries(args.headers ?? {})) {
+        if (value !== undefined) headers[key] = value
+      }
+      if (hasBody && !Object.keys(headers).some((h) => h.toLowerCase() === 'content-type')) {
+        headers['content-type'] = 'application/json'
+      }
 
-    let data: unknown
-    if (response.text !== '' && response.status !== 204 && response.status !== 205) {
-      if (/\bjson\b/i.test(response.headers.get('content-type') ?? '')) {
-        try {
-          data = JSON.parse(response.text)
-        } catch {
+      const response = await adapter({
+        method: route.method,
+        url: buildUrl(options.baseUrl, route, { ...args, params, query }),
+        headers,
+        body: hasBody ? JSON.stringify(body) : undefined,
+        signal: args.signal,
+      })
+
+      let data: unknown
+      if (response.text !== '' && response.status !== 204 && response.status !== 205) {
+        if (/\bjson\b/i.test(response.headers.get('content-type') ?? '')) {
+          try {
+            data = JSON.parse(response.text)
+          } catch {
+            data = response.text
+          }
+        } else {
           data = response.text
         }
-      } else {
-        data = response.text
       }
+
+      const match = responseDefForStatus(route, response.status)
+      if (response.status >= 200 && response.status < 300) {
+        if (!match) {
+          throw new UnexpectedResponseApiError(route, response.status, data, response.headers)
+        }
+        const schema = jsonSchemaOfResponse(match.def)
+        if (schema && validateResponse) {
+          const result = schema.safeParse(data)
+          if (!result.success) {
+            throw new ResponseValidationError(response.status, result.error, data)
+          }
+          return result.data
+        }
+        return data
+      }
+      const decoded = decodeError(decoders, {
+        route,
+        status: response.status,
+        data,
+        headers: response.headers,
+        mediaType: mediaTypeOf(response.headers.get('content-type')),
+      })
+      if (decoded) throw decoded
+      if (match) throw new ApiError(route, response.status, data, response.headers)
+      throw new UnexpectedResponseApiError(route, response.status, data, response.headers)
     }
 
-    const match = responseDefForStatus(route, response.status)
-    if (response.status >= 200 && response.status < 300) {
-      if (!match) {
-        throw new UnexpectedResponseApiError(route, response.status, data, response.headers)
+    if (onError === undefined) return attemptOnce()
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await attemptOnce()
+      } catch (error) {
+        const decision = await onError({ error, route, alias: route.alias, attempt })
+        if (decision !== 'retry') throw error
       }
-      const schema = jsonSchemaOfResponse(match.def)
-      if (schema && validateResponse) {
-        const result = schema.safeParse(data)
-        if (!result.success) {
-          throw new ResponseValidationError(response.status, result.error, data)
-        }
-        return result.data
-      }
-      return data
     }
-    const decoded = decodeError(decoders, {
-      route,
-      status: response.status,
-      data,
-      headers: response.headers,
-      mediaType: mediaTypeOf(response.headers.get('content-type')),
-    })
-    if (decoded) throw decoded
-    if (match) throw new ApiError(route, response.status, data, response.headers)
-    throw new UnexpectedResponseApiError(route, response.status, data, response.headers)
   }
 
   const client: Record<string, unknown> = {}

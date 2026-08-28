@@ -38,6 +38,7 @@ createClient(routes, {
   headers: () => ({ authorization: `Bearer ${token}` }), // static object or (async) function
   adapter: fetchAdapter(), // transport seam
   decoders: decodersFor(problemFlavor), // error decoders (default: zodapi's own 400)
+  onError: ({ error, attempt }) => {}, // error hook; return 'retry' to re-run the request
 })
 ```
 
@@ -59,15 +60,23 @@ createClient(routes, {
   to disable decoding entirely.
 - **Query arrays** are serialised with the `[]` key suffix (`tags[]=a&tags[]=b`), matching the
   normalisation `createApp()` from `@zodapi/hono` applies at the edge.
-- **Codecs** (e.g. the date codecs `@zodapi/codegen` emits with its `dates` options) only run when
-  validation does, so the client fails fast — before sending — when the effective validate mode
-  would skip a codec-bearing schema: a 2xx response schema with a codec requires `'response'` or
-  `'both'`. Validated codec-bearing request data is re-encoded to its wire form (a date-only codec
-  stays `YYYY-MM-DD` instead of being `JSON.stringify`'d as a full datetime). With
-  `encodeRequests: true` (client-level or per call, flipping the request arg types from `z.input`
-  to `z.output`) you pass decoded values — `Date` objects — and the client `z.encode`s them;
-  codec-bearing request schemas then also require request validation. `z.encode` rejects one-way
-  transforms, so a schema mixing a codec with `queryArray()` cannot be encoded.
+- **Codecs** (e.g. the date codecs `@zodapi/codegen` emits with its `dates` options) only decode
+  when response validation runs, so the client fails fast — before sending — when a 2xx response
+  schema with a codec would be skipped (`validate` must be `'response'` or `'both'`). Validated
+  codec-bearing request data is re-encoded to its wire form (a date-only codec stays `YYYY-MM-DD`
+  instead of being `JSON.stringify`'d as a full datetime). With `encodeRequests: true`
+  (client-level or per call, flipping the request arg types from `z.input` to `z.output`) you pass
+  decoded values — `Date` objects — and the client `z.encode`s them; encoding is a serialization
+  concern independent of `validate`, though `z.encode` validates as it encodes, so an invalid
+  value throws `RequestValidationError` even with request validation off. `z.encode` rejects
+  one-way transforms, so a schema mixing a codec with `queryArray()` cannot be encoded.
+- **Retries** go through `onError` (client-level, or per call to replace it): the hook receives
+  `{ error, route, alias, attempt }` before an error is thrown and may return `'retry'` (sync or
+  async) to re-run the request. The `headers` function is re-evaluated on every attempt, so an
+  expired-token flow is just: on a 401, refresh the token, return `'retry'`. Transport errors,
+  `ApiError` and subclasses, and `ResponseValidationError` reach the hook; client-side request
+  validation/encoding failures don't (the same input would fail again). There's no built-in
+  attempt cap — bound retries with `attempt`.
 
 ## Axios
 

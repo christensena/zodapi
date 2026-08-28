@@ -1,4 +1,10 @@
-import { createClient, type ApiErrorOf, matchErrorByStatus, isErrorFromRoute } from '@zodapi/client'
+import {
+  createClient,
+  type ApiErrorOf,
+  type OnError,
+  matchErrorByStatus,
+  isErrorFromRoute,
+} from '@zodapi/client'
 import type { SuccessData, ErrorVariant } from '@zodapi/core'
 import type { ValidationError } from '@zodapi/core'
 import { describe, expectTypeOf, it } from 'vitest'
@@ -14,6 +20,12 @@ describe('client type inference', () => {
       .toExtend<{ params: { id: string } } | undefined>()
     expectTypeOf(client.getThing).returns.resolves.toEqualTypeOf<{ id: string; name: string }>()
     expectTypeOf(client.createThing).parameter(0).toExtend<{ body: { name: string } } | undefined>()
+  })
+
+  it('accepts a per-call onError hook', () => {
+    expectTypeOf<{ params: { id: string }; onError: OnError }>().toExtend<
+      NonNullable<Parameters<typeof client.getThing>[0]>
+    >()
   })
 
   it('makes args optional when nothing is required', () => {
