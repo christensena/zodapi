@@ -15,6 +15,7 @@ export const User = z
     role: Role,
     website: z.url().optional(),
     createdAt: z.iso.datetime(),
+    birthDate: z.iso.date().optional(),
     tags: z.array(z.string()).min(1).max(10),
   })
   .meta({ id: 'User', description: 'A registered user' })
@@ -35,6 +36,14 @@ export const Gadget = z
   .object({ kind: z.literal('gadget'), color: z.string() })
   .meta({ id: 'Gadget' })
 export const Product = z.union([Widget, Gadget]).meta({ id: 'Product' })
+
+export const UserCreated = z
+  .object({ type: z.literal('user.created'), user: User })
+  .meta({ id: 'UserCreated' })
+export const UserDeleted = z
+  .object({ type: z.literal('user.deleted'), userId: z.uuid() })
+  .meta({ id: 'UserDeleted' })
+export const Event = z.discriminatedUnion('type', [UserCreated, UserDeleted]).meta({ id: 'Event' })
 
 export const Labels = z.record(z.string(), z.string()).meta({ id: 'Labels' })
 
@@ -80,6 +89,7 @@ export const listUsers = route({
       role: Role.optional(),
       tags: queryArray(z.string()).optional(),
       search: z.string().meta({ description: 'Free-text filter' }).optional(),
+      since: z.iso.datetime().optional(),
     }),
   },
   responses: {
@@ -110,6 +120,7 @@ export const createUser = route({
           schema: z.object({
             email: z.email(),
             name: z.string(),
+            remindAt: z.iso.datetime().optional(),
             role: Role.default('member'),
             settings: z.looseObject({ theme: z.string() }).optional(),
           }),
@@ -164,6 +175,15 @@ export const listProducts = route({
   },
 })
 
+export const listEvents = route({
+  alias: 'listEvents',
+  method: 'get',
+  path: '/events',
+  responses: {
+    200: { description: 'ok', content: { 'application/json': { schema: z.array(Event) } } },
+  },
+})
+
 export const exportReport = route({
   method: 'get',
   path: '/reports/{year}/export',
@@ -207,6 +227,7 @@ export const routes = [
   deleteUser,
   getCategories,
   listProducts,
+  listEvents,
   exportReport,
   getNotes,
 ] as const

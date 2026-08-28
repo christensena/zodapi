@@ -9,7 +9,18 @@ type GeneratedRoute = RouteDef & {
   tags?: readonly string[]
 }
 
+export const isoDatetimeToDate = z.codec(z.iso.datetime(), z.date(), {
+  decode: (value) => new Date(value),
+  encode: (date) => date.toISOString(),
+})
+
+export const isoDateToDate = z.codec(z.iso.date(), z.date(), {
+  decode: (value) => new Date(`${value}T00:00:00Z`),
+  encode: (date) => date.toISOString().slice(0, 10),
+})
+
 export const Role = z.enum(["admin", "member", "guest"]).meta({ id: "Role" })
+export type Role = z.infer<typeof Role>
 
 export const User = z.object({
   id: z.uuid(),
@@ -20,10 +31,11 @@ export const User = z.object({
   bio: z.string().nullable(),
   role: Role,
   website: z.url().optional(),
-  createdAt: z.iso.datetime(),
-  birthDate: z.iso.date().optional(),
+  createdAt: isoDatetimeToDate,
+  birthDate: isoDateToDate.optional(),
   tags: z.array(z.string()).min(1).max(10),
 }).meta({ id: "User", description: "A registered user" })
+export type User = z.infer<typeof User>
 
 export const ValidationError = z.looseObject({
   type: z.enum(["urn:zodapi:validation"]),
@@ -35,6 +47,7 @@ export const ValidationError = z.looseObject({
     message: z.string(),
   })),
 }).meta({ id: "ValidationError" })
+export type ValidationError = z.infer<typeof ValidationError>
 
 export const NotFound = z.object({
   error: z.object({
@@ -42,8 +55,10 @@ export const NotFound = z.object({
     message: z.string(),
   }),
 }).meta({ id: "NotFound" })
+export type NotFound = z.infer<typeof NotFound>
 
 export const Labels = z.record(z.string(), z.string()).meta({ id: "Labels" })
+export type Labels = z.infer<typeof Labels>
 
 export const Category = z.object({
   name: z.string(),
@@ -51,39 +66,48 @@ export const Category = z.object({
     return z.array(Category)
   },
 }).meta({ id: "Category" })
+export type Category = z.infer<typeof Category>
 
 export const Widget = z.object({
   kind: z.enum(["widget"]),
   size: z.number(),
 }).meta({ id: "Widget" })
+export type Widget = z.infer<typeof Widget>
 
 export const Gadget = z.object({
   kind: z.enum(["gadget"]),
   color: z.string(),
 }).meta({ id: "Gadget" })
+export type Gadget = z.infer<typeof Gadget>
 
 export const Product = z.union([Widget, Gadget]).meta({ id: "Product" })
+export type Product = z.infer<typeof Product>
 
 export const UserCreated = z.object({
   type: z.enum(["user.created"]),
   user: User,
 }).meta({ id: "UserCreated" })
+export type UserCreated = z.infer<typeof UserCreated>
 
 export const UserDeleted = z.object({
   type: z.enum(["user.deleted"]),
   userId: z.uuid(),
 }).meta({ id: "UserDeleted" })
+export type UserDeleted = z.infer<typeof UserDeleted>
 
 export const Event = z.discriminatedUnion("type", [UserCreated, UserDeleted]).meta({ id: "Event" })
+export type Event = z.infer<typeof Event>
 
 export const Timestamps = z.object({
-  createdAt: z.iso.datetime(),
-  updatedAt: z.iso.datetime(),
+  createdAt: isoDatetimeToDate,
+  updatedAt: isoDatetimeToDate,
 }).meta({ id: "Timestamps" })
+export type Timestamps = z.infer<typeof Timestamps>
 
 export const AuditedNote = z.intersection(z.object({
   text: z.string(),
 }), Timestamps).meta({ id: "AuditedNote" })
+export type AuditedNote = z.infer<typeof AuditedNote>
 
 export const getUser = {
   method: "get",
@@ -165,7 +189,7 @@ export const listUsers = {
       role: Role.optional(),
       tags: queryArray(z.string()).optional(),
       search: z.string().meta({ description: "Free-text filter" }).optional(),
-      since: z.iso.datetime().optional(),
+      since: isoDatetimeToDate.optional(),
     }),
   },
   responses: {
@@ -203,7 +227,7 @@ export const postUsers = {
           schema: z.object({
             email: z.email(),
             name: z.string(),
-            remindAt: z.iso.datetime().optional(),
+            remindAt: isoDatetimeToDate.optional(),
             role: Role.optional(),
             settings: z.looseObject({
               theme: z.string(),

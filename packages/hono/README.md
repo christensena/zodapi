@@ -36,9 +36,10 @@ The result is a plain route object: pass it to `app.openapi(...)` on the server 
 
 ## createApp()
 
-An `OpenAPIHono` whose validation failures respond `400` with the fixed `ValidationError` shape
-from `@zodapi/core` (pass your own `defaultHook` to override), and whose edge accepts the `a[]=`
-query-array convention (`a[]=1&a[]=2` is normalised to repeated plain keys before validation).
+An `OpenAPIHono` whose validation failures respond `400` with the fixed `ValidationError`
+problem-details shape from `@zodapi/core`, served as `application/problem+json` (pass your own
+`defaultHook` to override), and whose edge accepts the `a[]=` query-array convention
+(`a[]=1&a[]=2` is normalised to repeated plain keys before validation).
 
 ```ts
 import { createApp } from '@zodapi/hono'

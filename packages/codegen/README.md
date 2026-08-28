@@ -28,11 +28,46 @@ One file, importing only `zod` and `@zodapi/core`:
   client `alias` (no alias without one); the spec's declared responses are taken verbatim, nothing
   (like the zodapi `400`) is injected
 - a `routes` tuple ready for `createClient(routes)` from `@zodapi/client`
+- a `problemFlavor` const (`'zodapi' | 'problem-details' | undefined`, detected from the spec's
+  error responses — zodapi's `urn:zodapi:validation` problem type, or an ASP.NET-style
+  `ValidationProblemDetails`) to feed `decodersFor(problemFlavor)` when creating the client
+- with `exportTypes: true` (CLI `--export-types`), a `type <Name> = z.infer<typeof <Name>>` alias
+  alongside each component const (the zodios codegen convention). `z.infer` is the output side —
+  use `z.input<typeof <Name>>` where the wire form differs (e.g. date codecs)
 
 Query parameters typed `array` are declared with `queryArray(item)` from `@zodapi/core`, matching
 the zodapi `a[]=` convention.
 
 Output is unformatted; run your formatter over it.
+
+## Date conversion
+
+By default ISO strings stay strings (`z.iso.datetime()` / `z.iso.date()`). Opt in to `Date`
+conversion per format:
+
+```sh
+zodapi-codegen openapi.json -o contract.ts --dates-datetime --dates-date --dates-offset
+```
+
+```ts
+generateContract(doc, { dates: { datetime: true, date: true, offset: true } })
+```
+
+- `datetime` / `--dates-datetime`: `format: date-time` fields become a bidirectional
+  `z.codec(z.iso.datetime(), z.date(), ...)` — responses parse to `Date`, requests encode back to
+  the wire string
+- `date` / `--dates-date`: `format: date` fields become a codec decoding to `Date` at UTC midnight
+  and encoding back to `YYYY-MM-DD`
+- `offset` / `--dates-offset`: accept UTC offsets in date-time values
+  (`z.iso.datetime({ offset: true })`)
+
+The codecs are emitted once as shared `isoDatetimeToDate` / `isoDateToDate` consts; a field with
+extra wire-side constraints or a `default` inlines the codec with those applied to its input side.
+
+Because codecs change parsed values, `@zodapi/client` refuses calls whose validation mode would
+skip a codec-bearing schema (see the client README); pair a dates contract with
+`validate: 'response'` (the default) or `'both'`, and optionally `encodeRequests: true` to pass
+`Date` objects in requests too.
 
 ## Fidelity
 

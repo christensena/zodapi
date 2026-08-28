@@ -19,9 +19,11 @@ export {
 export {
   ApiError,
   type ApiErrorOf,
+  ProblemApiError,
   RequestValidationError,
   ResponseValidationError,
-  UnexpectedResponseError,
+  UnexpectedResponseApiError,
+  ValidationApiError,
   isAxiosErrorFromRoute,
   isErrorFromAlias,
   isErrorFromRoute,
@@ -29,10 +31,26 @@ export {
   matchErrorByStatus,
 } from './errors.js'
 export {
+  PROBLEM_JSON_CONTENT_TYPE,
+  ProblemDetails,
   ValidationError,
   ValidationIssue,
   ValidationTarget,
+  ZODAPI_VALIDATION_TYPE,
   isValidationErrorBody,
   validationErrorBody,
 } from './validation-error.js'
+export {
+  type DecodableResponse,
+  type ErrorDecoder,
+  type KeyCasing,
+  type ProblemDetailsOptions,
+  type ProblemFlavor,
+  decodeError,
+  decodersFor,
+  mediaTypeOf,
+  problemDetails,
+  zodapiValidationDecoder,
+} from './decoders.js'
 export { queryArray } from './query.js'
+export { schemaContainsCodec } from './codec.js'

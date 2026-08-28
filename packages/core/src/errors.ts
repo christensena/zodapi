@@ -8,7 +8,12 @@ import {
   jsonSchemaOfResponse,
   responseDefForStatus,
 } from './route.js'
-import { type ValidationError, isValidationErrorBody } from './validation-error.js'
+import {
+  type ProblemDetails,
+  type ValidationError,
+  type ValidationTarget,
+  isValidationErrorBody,
+} from './validation-error.js'
 
 /**
  * Thrown by the client for a response whose status is declared as a non-2xx
@@ -34,15 +39,54 @@ export class ApiError<R extends RouteDef = RouteDef> extends Error {
 export type ApiErrorOf<R extends RouteDef> = ApiError<R> & ErrorVariant<R>
 
 /** Thrown for a response status the route contract does not declare. */
-export class UnexpectedResponseError extends Error {
-  override name = 'UnexpectedResponseError'
+export class UnexpectedResponseApiError extends ApiError {
+  override name = 'UnexpectedResponseApiError'
+  constructor(route: RouteDef, status: number, data: unknown, headers: Headers) {
+    super(route, status, data, headers)
+    this.message = `${route.method.toUpperCase()} ${route.path} returned undeclared status ${status}`
+  }
+}
+
+/**
+ * Thrown when an error decoder recognises a server-side validation failure
+ * (zodapi's own problem+json 400, or a foreign flavor such as ASP.NET's
+ * `ValidationProblemDetails`). `error` is a real `z.ZodError` revived from the
+ * server's issues, so `z.flattenError`/`z.treeifyError` and existing
+ * form-mapping code work identically to client-side validation failures.
+ */
+export class ValidationApiError<R extends RouteDef = RouteDef> extends ApiError<R> {
+  override name = 'ValidationApiError'
+  // Record-typed so z.flattenError gives indexable fieldErrors.
+  readonly error: z.ZodError<Record<string, unknown>>
+  /** Which request part failed, when the backend reports it. */
+  readonly target: ValidationTarget | undefined
+
   constructor(
-    readonly route: RouteDef,
-    readonly status: number,
-    readonly data: unknown,
-    readonly headers: Headers,
+    route: R,
+    status: number,
+    data: unknown,
+    headers: Headers,
+    error: z.ZodError<Record<string, unknown>>,
+    target?: ValidationTarget,
   ) {
-    super(`${route.method.toUpperCase()} ${route.path} returned undeclared status ${status}`)
+    super(route, status, data, headers)
+    this.error = error
+    this.target = target
+  }
+}
+
+/**
+ * Thrown when an error decoder recognises a non-validation RFC 9457 problem
+ * response. `problem` is the parsed problem-details body (extension members
+ * included); `data` stays the raw body.
+ */
+export class ProblemApiError<R extends RouteDef = RouteDef> extends ApiError<R> {
+  override name = 'ProblemApiError'
+  readonly problem: ProblemDetails
+
+  constructor(route: R, status: number, data: unknown, headers: Headers, problem: ProblemDetails) {
+    super(route, status, data, headers)
+    this.problem = problem
   }
 }
 

@@ -1,11 +1,11 @@
 import { createRoute, type RouteConfig } from '@hono/zod-openapi'
-import { ValidationError } from '@zodapi/core'
+import { PROBLEM_JSON_CONTENT_TYPE, ValidationError } from '@zodapi/core'
 import type { z } from 'zod'
 
 /** The 400 response definition `route()` adds to every route. */
 export const validationErrorResponse = {
   description: 'Request validation failed',
-  content: { 'application/json': { schema: ValidationError } },
+  content: { [PROBLEM_JSON_CONTENT_TYPE]: { schema: ValidationError } },
 } as const
 
 type ValidationErrorResponse = typeof validationErrorResponse

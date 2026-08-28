@@ -7,12 +7,12 @@ fetch/axios client with optional runtime validation and zodios-style error guard
 
 ## Packages
 
-| Package           | What it is                                                                                                                                                                                            |
-| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@zodapi/core`    | Contract types, the fixed `ValidationError` 400 shape, `ApiError` + typed error guards (`isErrorFromRoute`, `matchErrorByStatus`, `isAxiosErrorFromRoute`, ...). No HTTP deps.                        |
-| `@zodapi/hono`    | Thin preset over `@hono/zod-openapi`: `createApp()` (fixed 400 shape via `defaultHook`, `a[]=` query normalization) and `route()` (`createRoute` + injected 400 + `body.required` default + `alias`). |
-| `@zodapi/client`  | `createClient(routes, ...)`: path- or alias-addressed typed calls over fetch (default) or axios (`@zodapi/client/axios`), with `validate: 'none' \| 'request' \| 'response' \| 'both'`.               |
-| `@zodapi/codegen` | `zodapi-codegen openapi.json -o contract.ts`: generates a zodapi contract (zod schemas + route objects) from an OpenAPI 3.1 document, for backends not written in TypeScript.                         |
+| Package           | What it is                                                                                                                                                                                                                                                 |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@zodapi/core`    | Contract types, the fixed `ValidationError` 400 problem-details shape, `ApiError` + typed error guards (`isErrorFromRoute`, `matchErrorByStatus`, `isAxiosErrorFromRoute`, ...), pluggable error decoders (`problemDetails`, `decodersFor`). No HTTP deps. |
+| `@zodapi/hono`    | Thin preset over `@hono/zod-openapi`: `createApp()` (fixed 400 shape via `defaultHook`, `a[]=` query normalization) and `route()` (`createRoute` + injected 400 + `body.required` default + `alias`).                                                      |
+| `@zodapi/client`  | `createClient(routes, ...)`: path- or alias-addressed typed calls over fetch (default) or axios (`@zodapi/client/axios`), with `validate: 'none' \| 'request' \| 'response' \| 'both'`.                                                                    |
+| `@zodapi/codegen` | `zodapi-codegen openapi.json -o contract.ts`: generates a zodapi contract (zod schemas + route objects) from an OpenAPI 3.1 document, for backends not written in TypeScript.                                                                              |
 
 `examples/api` is a shared contract, `examples/app` a runnable server + client demo.
 
@@ -50,17 +50,19 @@ const app = createApp()
   .doc31('/openapi.json', { openapi: '3.1.0', info: { title: 'API', version: '1.0.0' } })
 ```
 
-Validation failures return `400` with the fixed shape (also documented as the `ValidationError`
-component on every route):
+Validation failures return `400` as an [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) problem
+(`Content-Type: application/problem+json`, also documented as the `ValidationError` component on
+every route):
 
 ```json
-{ "error": { "code": "VALIDATION", "target": "query", "issues": [ ... zod issues ... ] } }
+{ "type": "urn:zodapi:validation", "status": 400, "target": "query", "issues": [ ... zod issues ... ] }
 ```
 
 Client:
 
 ```ts
-import { createClient, isValidationError, matchErrorByStatus } from '@zodapi/client'
+import { ValidationApiError, createClient, matchErrorByStatus } from '@zodapi/client'
+import { z } from 'zod'
 
 const client = createClient(routes, { baseUrl: 'http://localhost:3000' })
 
@@ -70,10 +72,23 @@ const same = await client.getUser({ params: { id: '1' } }) // by alias
 try {
   await client.createUser({ body: newUser })
 } catch (err) {
-  if (matchErrorByStatus(createUser, err, 409)) {
+  if (err instanceof ValidationApiError) {
+    z.flattenError(err.error).fieldErrors // a real ZodError, revived from the server's issues
+  } else if (matchErrorByStatus(createUser, err, 409)) {
     err.data.error.existingId // fully typed, runtime-checked with zod
   }
 }
+```
+
+Server-side validation failures are decoded into `ValidationApiError` carrying a real `z.ZodError`,
+so client- and server-side failures share one handling path. Non-zodapi backends that speak
+RFC 9457 (ASP.NET, Spring, ...) plug in via decoders:
+
+```ts
+import { decodersFor } from '@zodapi/client'
+import { problemFlavor, routes } from './generated-contract.js' // @zodapi/codegen emits the flavor
+
+const client = createClient(routes, { baseUrl, decoders: decodersFor(problemFlavor) })
 ```
 
 Axios instead of fetch:
@@ -99,8 +114,9 @@ The generated file imports only `zod` and `@zodapi/core`: one exported const per
 `components/schemas` entry (component name = const name, recursion via shape getters), one plain
 `RouteDef` object per operation (`operationId` becomes the client `alias`; no alias without one),
 and a `routes` tuple ready for `createClient(routes)`. The spec's declared responses are taken
-verbatim — nothing (like the zodapi `400`) is injected. Output is unformatted; run your formatter
-over it.
+verbatim — nothing (like the zodapi `400`) is injected. A `problemFlavor` const
+(`'zodapi' | 'problem-details' | undefined`, detected from the spec's error responses) is exported
+for `decodersFor(...)`. Output is unformatted; run your formatter over it.
 
 Fidelity is enforced by a round-trip test: a comprehensive hand-written contract is serialized to
 OpenAPI, fed through the generator, and the doc emitted from the generated contract must equal the
@@ -113,9 +129,11 @@ OpenAPI 3.0 documents (3.1 only).
 - **Query arrays** use `a[]=1&a[]=2`. Declare them with `queryArray(item)`; `createApp()` strips the
   `[]` suffix at the edge (its `fetch`), so plain repeated keys work too. The normalization does not
   apply when the app is mounted under another Hono app via `.route()`.
-- **Errors throw.** Declared non-2xx statuses throw `ApiError` (narrow with the guards); undeclared
-  statuses throw `UnexpectedResponseError`; client-side validation failures throw
-  `RequestValidationError` / `ResponseValidationError`.
+- **Errors throw.** Non-2xx responses run through the error decoders first (server validation
+  failures throw `ValidationApiError`, other recognised problem+json responses `ProblemApiError`);
+  otherwise declared statuses throw `ApiError` (narrow with the guards) and undeclared statuses
+  `UnexpectedResponseApiError`. Client-side validation failures throw `RequestValidationError` /
+  `ResponseValidationError`.
 - **Validation default** is `'response'` (2xx bodies parsed with the contract schema; error bodies
   are checked by the guards instead).
 - `request.body.required` defaults to `true` so a missing/mismatched `Content-Type` is a 400, not a
