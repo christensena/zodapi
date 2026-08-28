@@ -9,9 +9,10 @@ import {
   mediaTypeOf,
   responseDefForStatus,
   type RouteDef,
+  schemaContainsCodec,
   zodapiValidationDecoder,
 } from '@zodapi/core'
-import type { z } from 'zod'
+import { z } from 'zod'
 
 import { fetchAdapter, type Adapter } from './adapter.js'
 import type { ValidateMode, ZodapiClient } from './types.js'
@@ -36,6 +37,16 @@ export interface ClientOptions {
    * `decodersFor(...)`) for non-zodapi backends. Pass `[]` to disable.
    */
   decoders?: readonly ErrorDecoder[]
+  /**
+   * Supply request data in decoded (schema output) form — e.g. `Date` objects
+   * where the contract uses date codecs — and let the client encode it to the
+   * wire form with `z.encode`. Request args are then typed with `z.output`
+   * instead of `z.input`. Codec-bearing request schemas additionally require
+   * request validation ('request' or 'both'). Overridable per call. Note:
+   * `z.encode` rejects one-way transforms, so a schema mixing a codec with
+   * e.g. `queryArray()` cannot be encoded.
+   */
+  encodeRequests?: boolean
 }
 
 interface AnyArgs {
@@ -45,6 +56,7 @@ interface AnyArgs {
   headers?: Record<string, string | undefined> | undefined
   signal?: AbortSignal | undefined
   validate?: ValidateMode | undefined
+  encodeRequests?: boolean | undefined
 }
 
 function serializeQueryValue(value: unknown): string {
@@ -80,25 +92,69 @@ function jsonBodySchema(route: RouteDef): z.ZodType | undefined {
   return body ? jsonSchemaOfResponse(body) : undefined
 }
 
-export function createClient<const Rs extends readonly RouteDef[]>(
+/**
+ * With response validation off, a codec-bearing 2xx schema would return wire
+ * data (e.g. ISO strings) while the types promise decoded values (`Date`) —
+ * fail fast before the request is sent instead.
+ */
+function assertNoCodecInSuccessResponses(route: RouteDef): void {
+  for (const [status, def] of Object.entries(route.responses)) {
+    if (!String(status).startsWith('2')) continue
+    const schema = jsonSchemaOfResponse(def)
+    if (schema && schemaContainsCodec(schema)) {
+      throw new Error(
+        `Response schema (${status}) for ${route.method.toUpperCase()} ${route.path} contains a codec; ` +
+          `enable response validation (validate: 'response' or 'both') so decoded values match the contract types`,
+      )
+    }
+  }
+}
+
+export function createClient<const Rs extends readonly RouteDef[], const O extends ClientOptions>(
   routes: Rs,
-  options: ClientOptions,
-): ZodapiClient<Rs> {
+  options: O,
+): ZodapiClient<Rs, O extends { encodeRequests: true } ? 'output' : 'input'> {
   const adapter = options.adapter ?? fetchAdapter()
   const defaultValidate = options.validate ?? 'response'
+  const defaultEncodeRequests = options.encodeRequests ?? false
   const decoders = options.decoders ?? [zodapiValidationDecoder]
 
   const call = async (route: RouteDef, args: AnyArgs = {}): Promise<unknown> => {
     const validate = args.validate ?? defaultValidate
+    const encodeRequests = args.encodeRequests ?? defaultEncodeRequests
     const validateRequest = validate === 'request' || validate === 'both'
     const validateResponse = validate === 'response' || validate === 'both'
+
+    if (!validateResponse) assertNoCodecInSuccessResponses(route)
 
     const parseInput = <T>(
       target: 'param' | 'query' | 'header' | 'json',
       schema: z.ZodType | undefined,
       value: T,
     ): T => {
-      if (!schema || !validateRequest) return value
+      if (!schema) return value
+      const hasCodec = schemaContainsCodec(schema)
+      if (!validateRequest) {
+        if (encodeRequests && hasCodec) {
+          throw new Error(
+            `Request ${target} schema for ${route.method.toUpperCase()} ${route.path} contains a codec; ` +
+              `'encodeRequests' requires request validation (validate: 'request' or 'both')`,
+          )
+        }
+        return value
+      }
+      if (hasCodec) {
+        // The wire form is the codec's input side: encode decoded values
+        // directly, or re-encode after parsing so e.g. a date-only codec is not
+        // serialized by JSON.stringify as a full datetime.
+        const decoded = encodeRequests
+          ? { success: true as const, data: value }
+          : schema.safeParse(value)
+        if (!decoded.success) throw new RequestValidationError(target, decoded.error)
+        const encoded = z.safeEncode(schema, decoded.data as never)
+        if (!encoded.success) throw new RequestValidationError(target, encoded.error)
+        return encoded.data as T
+      }
       const result = schema.safeParse(value)
       if (!result.success) throw new RequestValidationError(target, result.error)
       return result.data as T
@@ -189,5 +245,5 @@ export function createClient<const Rs extends readonly RouteDef[]>(
       return call(route, args)
     }
   }
-  return client as ZodapiClient<Rs>
+  return client as ZodapiClient<Rs, O extends { encodeRequests: true } ? 'output' : 'input'>
 }

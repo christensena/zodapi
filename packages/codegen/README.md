@@ -37,6 +37,35 @@ the zodapi `a[]=` convention.
 
 Output is unformatted; run your formatter over it.
 
+## Date conversion
+
+By default ISO strings stay strings (`z.iso.datetime()` / `z.iso.date()`). Opt in to `Date`
+conversion per format:
+
+```sh
+zodapi-codegen openapi.json -o contract.ts --dates-datetime --dates-date --dates-offset
+```
+
+```ts
+generateContract(doc, { dates: { datetime: true, date: true, offset: true } })
+```
+
+- `datetime` / `--dates-datetime`: `format: date-time` fields become a bidirectional
+  `z.codec(z.iso.datetime(), z.date(), ...)` — responses parse to `Date`, requests encode back to
+  the wire string
+- `date` / `--dates-date`: `format: date` fields become a codec decoding to `Date` at UTC midnight
+  and encoding back to `YYYY-MM-DD`
+- `offset` / `--dates-offset`: accept UTC offsets in date-time values
+  (`z.iso.datetime({ offset: true })`)
+
+The codecs are emitted once as shared `isoDatetimeToDate` / `isoDateToDate` consts; a field with
+extra wire-side constraints or a `default` inlines the codec with those applied to its input side.
+
+Because codecs change parsed values, `@zodapi/client` refuses calls whose validation mode would
+skip a codec-bearing schema (see the client README); pair a dates contract with
+`validate: 'response'` (the default) or `'both'`, and optionally `encodeRequests: true` to pass
+`Date` objects in requests too.
+
 ## Fidelity
 
 The converter covers the JSON Schema subset OpenAPI 3.1 uses: objects (required/optional,

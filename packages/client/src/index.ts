@@ -5,6 +5,7 @@ export type {
   ArgsTuple,
   MethodCallers,
   RequestArgs,
+  RequestIO,
   ValidateMode,
   ZodapiClient,
 } from './types.js'

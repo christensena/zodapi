@@ -15,6 +15,7 @@ export const User = z
     role: Role,
     website: z.url().optional(),
     createdAt: z.iso.datetime(),
+    birthDate: z.iso.date().optional(),
     tags: z.array(z.string()).min(1).max(10),
   })
   .meta({ id: 'User', description: 'A registered user' })
@@ -88,6 +89,7 @@ export const listUsers = route({
       role: Role.optional(),
       tags: queryArray(z.string()).optional(),
       search: z.string().meta({ description: 'Free-text filter' }).optional(),
+      since: z.iso.datetime().optional(),
     }),
   },
   responses: {
@@ -118,6 +120,7 @@ export const createUser = route({
           schema: z.object({
             email: z.email(),
             name: z.string(),
+            remindAt: z.iso.datetime().optional(),
             role: Role.default('member'),
             settings: z.looseObject({ theme: z.string() }).optional(),
           }),

@@ -1,3 +1,4 @@
+import type { RouteDef } from '@zodapi/core'
 import { createApp, queryArray, route, z } from '@zodapi/hono'
 
 export const Thing = z.object({ id: z.string(), name: z.string() })
@@ -74,6 +75,48 @@ export const badShape = route({
 })
 
 export const routes = [getThing, listThings, createThing, teapot, badShape] as const
+
+// Date-codec routes, exercised with a stub adapter rather than the hono app.
+export const isoDatetimeToDate = z.codec(z.iso.datetime(), z.date(), {
+  decode: (value) => new Date(value),
+  encode: (date) => date.toISOString(),
+})
+export const isoDateToDate = z.codec(z.iso.date(), z.date(), {
+  decode: (value) => new Date(`${value}T00:00:00Z`),
+  encode: (date) => date.toISOString().slice(0, 10),
+})
+
+export const EventItem = z.object({ id: z.string(), at: isoDatetimeToDate })
+
+export const getEvent = {
+  alias: 'getEvent',
+  method: 'get',
+  path: '/events/{id}',
+  request: { params: z.object({ id: z.string() }) },
+  responses: {
+    200: { description: 'ok', content: { 'application/json': { schema: EventItem } } },
+  },
+} as const satisfies RouteDef
+
+export const createEvent = {
+  alias: 'createEvent',
+  method: 'post',
+  path: '/events',
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: z.object({ at: isoDatetimeToDate, day: isoDateToDate.optional() }),
+        },
+      },
+    },
+  },
+  responses: {
+    201: { description: 'created', content: { 'application/json': { schema: EventItem } } },
+  },
+} as const satisfies RouteDef
+
+export const codecRoutes = [getEvent, createEvent] as const
 
 export function makeApp(counters: { createCalls: number }) {
   return createApp()

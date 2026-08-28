@@ -14,10 +14,11 @@ import {
   isValidationError,
   matchErrorByStatus,
 } from '@zodapi/client'
+import type { AdapterRequest } from '@zodapi/client'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 
-import { createThing, getThing, makeApp, routes } from './contract.js'
+import { codecRoutes, createThing, getThing, makeApp, routes } from './contract.js'
 
 function makeClient(counters = { createCalls: 0 }) {
   const app = makeApp(counters)
@@ -242,5 +243,110 @@ describe('validation modes', () => {
     expect(err).toBeInstanceOf(RequestValidationError)
     expect((err as RequestValidationError).target).toBe('json')
     expect(counters.createCalls).toBe(0)
+  })
+})
+
+describe('date codecs', () => {
+  const eventJson = { id: '1', at: '2024-01-02T03:04:05.000Z' }
+
+  function stubAdapter(status = 200, body: unknown = eventJson) {
+    const calls: AdapterRequest[] = []
+    const adapter: Adapter = (request) => {
+      calls.push(request)
+      return Promise.resolve({
+        status,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        text: JSON.stringify(body),
+      })
+    }
+    return { adapter, calls }
+  }
+
+  const sentBody = (calls: AdapterRequest[]): unknown => JSON.parse(calls[0]?.body ?? 'null')
+
+  it('decodes response codecs when response validation is on (the default)', async () => {
+    const { adapter } = stubAdapter()
+    const client = createClient(codecRoutes, { baseUrl: 'http://test.local', adapter })
+    const event = await client.getEvent({ params: { id: '1' } })
+    expect(event.at).toBeInstanceOf(Date)
+    expect(event.at.toISOString()).toBe('2024-01-02T03:04:05.000Z')
+  })
+
+  it('rejects before sending when response validation is off for a codec response', async () => {
+    const { adapter, calls } = stubAdapter()
+    const client = createClient(codecRoutes, {
+      baseUrl: 'http://test.local',
+      adapter,
+      validate: 'none',
+    })
+    await expect(client.getEvent({ params: { id: '1' } })).rejects.toThrow(/contains a codec/)
+    expect(calls).toHaveLength(0)
+  })
+
+  it('re-encodes validated request bodies so date-only values keep their wire form', async () => {
+    const { adapter, calls } = stubAdapter(201)
+    const client = createClient(codecRoutes, {
+      baseUrl: 'http://test.local',
+      adapter,
+      validate: 'both',
+    })
+    await client.createEvent({ body: { at: '2024-01-02T03:04:05Z', day: '2024-01-02' } })
+    expect(sentBody(calls)).toEqual({ at: '2024-01-02T03:04:05.000Z', day: '2024-01-02' })
+  })
+
+  it('encodes Date request values with encodeRequests', async () => {
+    const { adapter, calls } = stubAdapter(201)
+    const client = createClient(codecRoutes, {
+      baseUrl: 'http://test.local',
+      adapter,
+      validate: 'both',
+      encodeRequests: true,
+    })
+    await client.createEvent({
+      body: { at: new Date('2024-01-02T03:04:05Z'), day: new Date('2024-01-02T00:00:00Z') },
+    })
+    expect(sentBody(calls)).toEqual({ at: '2024-01-02T03:04:05.000Z', day: '2024-01-02' })
+  })
+
+  it('flips encodeRequests per call', async () => {
+    const { adapter, calls } = stubAdapter(201)
+    const client = createClient(codecRoutes, {
+      baseUrl: 'http://test.local',
+      adapter,
+      validate: 'both',
+    })
+    await client.createEvent({
+      body: { at: new Date('2024-01-02T03:04:05Z') },
+      encodeRequests: true,
+    })
+    expect(sentBody(calls)).toEqual({ at: '2024-01-02T03:04:05.000Z' })
+  })
+
+  it('rejects encodeRequests without request validation on a codec-bearing schema', async () => {
+    const { adapter, calls } = stubAdapter(201)
+    const client = createClient(codecRoutes, {
+      baseUrl: 'http://test.local',
+      adapter,
+      encodeRequests: true, // validate defaults to 'response'
+    })
+    await expect(
+      client.createEvent({ body: { at: new Date('2024-01-02T03:04:05Z') } }),
+    ).rejects.toThrow(/requires request validation/)
+    expect(calls).toHaveLength(0)
+  })
+
+  it('reports invalid decoded values as RequestValidationError in encode mode', async () => {
+    const { adapter, calls } = stubAdapter(201)
+    const client = createClient(codecRoutes, {
+      baseUrl: 'http://test.local',
+      adapter,
+      validate: 'both',
+      encodeRequests: true,
+    })
+    const err = await client
+      .createEvent({ body: { at: 'not-a-date' as unknown as Date } })
+      .catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(RequestValidationError)
+    expect(calls).toHaveLength(0)
   })
 })

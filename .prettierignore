@@ -1,2 +1,3 @@
 # Machine-generated; byte-compared against generator output by the round-trip test.
 packages/codegen/test/fixture/generated.ts
+packages/codegen/test/fixture/generated-dates.ts

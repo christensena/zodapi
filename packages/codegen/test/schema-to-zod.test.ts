@@ -136,6 +136,64 @@ describe('convertSchema', () => {
   it('rejects unsupported types', () => {
     expect(() => code({ type: 'file' })).toThrow('unsupported schema type')
   })
+
+  describe('dates options', () => {
+    const datesCtx = (dates: ConvertContext['dates']): ConvertContext => ({
+      ...ctx,
+      dates,
+      dateCodec: (kind) => (kind === 'datetime' ? 'isoDatetimeToDate' : 'isoDateToDate'),
+    })
+    const dcode = (schema: unknown, dates: ConvertContext['dates']): string =>
+      convertSchema(schema, datesCtx(dates)).code
+
+    it('uses the shared codec for a bare date-time / date', () => {
+      expect(dcode({ type: 'string', format: 'date-time' }, { datetime: true })).toBe(
+        'isoDatetimeToDate',
+      )
+      expect(dcode({ type: 'string', format: 'date' }, { date: true })).toBe('isoDateToDate')
+    })
+
+    it('leaves formats alone when their option is off', () => {
+      expect(dcode({ type: 'string', format: 'date' }, { datetime: true })).toBe('z.iso.date()')
+      expect(dcode({ type: 'string', format: 'date-time' }, { date: true })).toBe(
+        'z.iso.datetime()',
+      )
+    })
+
+    it('inlines the codec when constraints apply to the wire side', () => {
+      expect(
+        dcode({ type: 'string', format: 'date-time', minLength: 20 }, { datetime: true }),
+      ).toBe(
+        'z.codec(z.iso.datetime().min(20), z.date(), { decode: (value) => new Date(value), encode: (date) => date.toISOString() })',
+      )
+    })
+
+    it('folds a default into the codec input instead of appending it', () => {
+      expect(
+        dcode(
+          { type: 'string', format: 'date-time', default: '2024-01-01T00:00:00Z' },
+          { datetime: true },
+        ),
+      ).toBe(
+        'z.codec(z.iso.datetime().default("2024-01-01T00:00:00Z"), z.date(), { decode: (value) => new Date(value), encode: (date) => date.toISOString() })',
+      )
+    })
+
+    it('keeps .nullable() outside the codec', () => {
+      expect(dcode({ type: ['string', 'null'], format: 'date-time' }, { datetime: true })).toBe(
+        'isoDatetimeToDate.nullable()',
+      )
+    })
+
+    it('honours the offset option on inline codecs', () => {
+      expect(
+        dcode(
+          { type: 'string', format: 'date-time', maxLength: 40 },
+          { datetime: true, offset: true },
+        ),
+      ).toContain('z.iso.datetime({ offset: true }).max(40)')
+    })
+  })
 })
 
 describe('generateContract', () => {
@@ -165,6 +223,32 @@ describe('generateContract', () => {
         },
       }),
     ).toThrow('unsupported $ref')
+  })
+
+  it('emits date codec helpers only when a matching format occurs', () => {
+    const doc = (schema: unknown) => ({
+      openapi: '3.1.0',
+      paths: {
+        '/x': {
+          get: {
+            responses: {
+              200: { description: 'ok', content: { 'application/json': { schema } } },
+            },
+          },
+        },
+      },
+    })
+    const withDatetime = generateContract(doc({ type: 'string', format: 'date-time' }), {
+      dates: { datetime: true, date: true, offset: true },
+    })
+    expect(withDatetime).toContain(
+      'export const isoDatetimeToDate = z.codec(z.iso.datetime({ offset: true }), z.date(), {',
+    )
+    expect(withDatetime).not.toContain('isoDateToDate')
+
+    const withoutDates = generateContract(doc({ type: 'string', format: 'date-time' }))
+    expect(withoutDates).toContain('z.iso.datetime()')
+    expect(withoutDates).not.toContain('isoDatetimeToDate')
   })
 
   it('falls back to method + path for the const name and omits the alias', () => {

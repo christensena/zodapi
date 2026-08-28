@@ -53,3 +53,4 @@ export {
   zodapiValidationDecoder,
 } from './decoders.js'
 export { queryArray } from './query.js'
+export { schemaContainsCodec } from './codec.js'

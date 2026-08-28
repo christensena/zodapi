@@ -8,17 +8,35 @@
 
 export type JsonSchema = Record<string, unknown>
 
+/** Convert ISO date/time strings to `Date` objects via bidirectional `z.codec`s. */
+export interface DatesOptions {
+  /** `format: date-time` → `z.codec(z.iso.datetime(), z.date(), ...)`. */
+  datetime?: boolean
+  /** `format: date` → a codec decoding to `Date` at UTC midnight. */
+  date?: boolean
+  /** Accept UTC offsets in date-time values (`z.iso.datetime({ offset: true })`). */
+  offset?: boolean
+}
+
+export type DateCodecKind = 'datetime' | 'date'
+
 export interface ConvertContext {
   /** Resolve a `$ref` to a generated identifier; `forward` when the target is not yet declared. */
   resolveRef(ref: string): { ident: string; forward: boolean }
   /** Resolve a `$ref` to its raw component schema, for structural checks; `undefined` when unknown. */
   resolveComponentSchema(ref: string): JsonSchema | undefined
+  /** Date-codec conversion options; absent → ISO strings stay strings. */
+  dates?: DatesOptions | undefined
+  /** Identifier of the shared date codec for `kind`, registering it as used. */
+  dateCodec?: ((kind: DateCodecKind) => string) | undefined
 }
 
 /** A zod expression plus whether it references an identifier declared later in the file. */
 export interface Expr {
   code: string
   forward: boolean
+  /** Set when the schema's `default` was folded into the expression already. */
+  defaultHandled?: boolean
 }
 
 function lit(code: string): Expr {
@@ -46,15 +64,61 @@ const STRING_FORMATS: Record<string, string> = {
   ipv6: 'z.ipv6()',
 }
 
-function stringExpr(schema: JsonSchema): string {
+/** The input-side (wire) schema of a date codec. */
+export function dateCodecInput(kind: DateCodecKind, dates: DatesOptions): string {
+  return kind === 'datetime'
+    ? `z.iso.datetime(${dates.offset ? '{ offset: true }' : ''})`
+    : 'z.iso.date()'
+}
+
+/** decode/encode function source for each date codec kind. */
+export const DATE_CODEC_FNS: Record<DateCodecKind, { decode: string; encode: string }> = {
+  datetime: {
+    decode: '(value) => new Date(value)',
+    encode: '(date) => date.toISOString()',
+  },
+  date: {
+    decode: '(value) => new Date(`${value}T00:00:00Z`)',
+    encode: '(date) => date.toISOString().slice(0, 10)',
+  },
+}
+
+function dateCodecExpr(kind: DateCodecKind, input: string): string {
+  const fns = DATE_CODEC_FNS[kind]
+  return `z.codec(${input}, z.date(), { decode: ${fns.decode}, encode: ${fns.encode} })`
+}
+
+function stringExpr(schema: JsonSchema, ctx: ConvertContext): Expr {
   const format = typeof schema['format'] === 'string' ? schema['format'] : undefined
+  const kind: DateCodecKind | undefined =
+    format === 'date-time' && ctx.dates?.datetime === true
+      ? 'datetime'
+      : format === 'date' && ctx.dates?.date === true
+        ? 'date'
+        : undefined
+  if (kind !== undefined && ctx.dateCodec !== undefined) {
+    // Constraints and `default` belong to the codec's input (wire) side; the
+    // shared helper covers the bare case, anything else inlines the codec.
+    const bare = dateCodecInput(kind, ctx.dates ?? {})
+    let input = bare
+    if (typeof schema['minLength'] === 'number') input += `.min(${schema['minLength']})`
+    if (typeof schema['maxLength'] === 'number') input += `.max(${schema['maxLength']})`
+    let defaultHandled = false
+    if ('default' in schema) {
+      input += `.default(${json(schema['default'])})`
+      defaultHandled = true
+    }
+    if (input === bare) return { code: ctx.dateCodec(kind), forward: false }
+    return { code: dateCodecExpr(kind, input), forward: false, defaultHandled }
+  }
+
   let code = (format !== undefined && STRING_FORMATS[format]) || 'z.string()'
   if (typeof schema['minLength'] === 'number') code += `.min(${schema['minLength']})`
   if (typeof schema['maxLength'] === 'number') code += `.max(${schema['maxLength']})`
   if (typeof schema['pattern'] === 'string' && (format === undefined || !STRING_FORMATS[format])) {
     code += `.regex(new RegExp(${json(schema['pattern'])}))`
   }
-  return code
+  return lit(code)
 }
 
 function numberExpr(schema: JsonSchema, integer: boolean): string {
@@ -253,7 +317,11 @@ function baseExpr(schema: JsonSchema, ctx: ConvertContext, indent: string): Expr
   if (Array.isArray(type)) {
     if (type.length === 2 && type.includes('null')) {
       const other = baseExpr({ ...schema, type: type.find((t) => t !== 'null') }, ctx, indent)
-      return { code: `${other.code}.nullable()`, forward: other.forward }
+      return {
+        code: `${other.code}.nullable()`,
+        forward: other.forward,
+        ...(other.defaultHandled !== undefined && { defaultHandled: other.defaultHandled }),
+      }
     }
     return unionExpr(
       type.map((t) => ({ ...schema, type: t })),
@@ -264,7 +332,7 @@ function baseExpr(schema: JsonSchema, ctx: ConvertContext, indent: string): Expr
 
   switch (type) {
     case 'string':
-      return lit(stringExpr(schema))
+      return stringExpr(schema, ctx)
     case 'number':
       return lit(numberExpr(schema, false))
     case 'integer':
@@ -290,9 +358,9 @@ function baseExpr(schema: JsonSchema, ctx: ConvertContext, indent: string): Expr
 }
 
 /** Metadata keywords carried through `.meta()` / `.default()` rather than validation. */
-function metaSuffix(schema: JsonSchema): string {
+function metaSuffix(schema: JsonSchema, skipDefault: boolean): string {
   let code = ''
-  if ('default' in schema) code += `.default(${json(schema['default'])})`
+  if (!skipDefault && 'default' in schema) code += `.default(${json(schema['default'])})`
   const meta: string[] = []
   if (typeof schema['title'] === 'string') meta.push(`title: ${json(schema['title'])}`)
   if (typeof schema['description'] === 'string') {
@@ -309,5 +377,8 @@ export function convertSchema(schema: unknown, ctx: ConvertContext, indent = '')
   if (schema === false) return lit('z.never()')
   if (!isSchemaObject(schema)) throw new Error(`expected a schema object, got ${json(schema)}`)
   const base = baseExpr(schema, ctx, indent)
-  return { code: base.code + metaSuffix(schema), forward: base.forward }
+  return {
+    code: base.code + metaSuffix(schema, base.defaultHandled === true),
+    forward: base.forward,
+  }
 }

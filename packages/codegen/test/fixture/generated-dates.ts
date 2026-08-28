@@ -9,6 +9,16 @@ type GeneratedRoute = RouteDef & {
   tags?: readonly string[]
 }
 
+export const isoDatetimeToDate = z.codec(z.iso.datetime(), z.date(), {
+  decode: (value) => new Date(value),
+  encode: (date) => date.toISOString(),
+})
+
+export const isoDateToDate = z.codec(z.iso.date(), z.date(), {
+  decode: (value) => new Date(`${value}T00:00:00Z`),
+  encode: (date) => date.toISOString().slice(0, 10),
+})
+
 export const Role = z.enum(["admin", "member", "guest"]).meta({ id: "Role" })
 
 export const User = z.object({
@@ -20,8 +30,8 @@ export const User = z.object({
   bio: z.string().nullable(),
   role: Role,
   website: z.url().optional(),
-  createdAt: z.iso.datetime(),
-  birthDate: z.iso.date().optional(),
+  createdAt: isoDatetimeToDate,
+  birthDate: isoDateToDate.optional(),
   tags: z.array(z.string()).min(1).max(10),
 }).meta({ id: "User", description: "A registered user" })
 
@@ -77,8 +87,8 @@ export const UserDeleted = z.object({
 export const Event = z.discriminatedUnion("type", [UserCreated, UserDeleted]).meta({ id: "Event" })
 
 export const Timestamps = z.object({
-  createdAt: z.iso.datetime(),
-  updatedAt: z.iso.datetime(),
+  createdAt: isoDatetimeToDate,
+  updatedAt: isoDatetimeToDate,
 }).meta({ id: "Timestamps" })
 
 export const AuditedNote = z.intersection(z.object({
@@ -165,7 +175,7 @@ export const listUsers = {
       role: Role.optional(),
       tags: queryArray(z.string()).optional(),
       search: z.string().meta({ description: "Free-text filter" }).optional(),
-      since: z.iso.datetime().optional(),
+      since: isoDatetimeToDate.optional(),
     }),
   },
   responses: {
@@ -203,7 +213,7 @@ export const postUsers = {
           schema: z.object({
             email: z.email(),
             name: z.string(),
-            remindAt: z.iso.datetime().optional(),
+            remindAt: isoDatetimeToDate.optional(),
             role: Role.optional(),
             settings: z.looseObject({
               theme: z.string(),

@@ -59,10 +59,10 @@ export class NameAllocator {
   private readonly used = new Set<string>(RESERVED)
   private readonly byOriginal = new Map<string, string>()
 
-  allocate(original: string): string {
+  allocate(original: string, preferred = original): string {
     const existing = this.byOriginal.get(original)
     if (existing !== undefined) return existing
-    const base = sanitize(original)
+    const base = sanitize(preferred)
     let candidate = base
     for (let i = 2; this.used.has(candidate); i++) {
       candidate = `${base}${i}`

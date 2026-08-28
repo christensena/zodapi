@@ -34,6 +34,7 @@ request schemas; return types are the union of the route's declared 2xx json bod
 createClient(routes, {
   baseUrl: 'http://localhost:3000',
   validate: 'response', // 'none' | 'request' | 'response' | 'both' (default 'response')
+  encodeRequests: false, // pass decoded (z.output) request values, encoded to the wire via z.encode
   headers: () => ({ authorization: `Bearer ${token}` }), // static object or (async) function
   adapter: fetchAdapter(), // transport seam
   decoders: decodersFor(problemFlavor), // error decoders (default: zodapi's own 400)
@@ -58,6 +59,15 @@ createClient(routes, {
   to disable decoding entirely.
 - **Query arrays** are serialised with the `[]` key suffix (`tags[]=a&tags[]=b`), matching the
   normalisation `createApp()` from `@zodapi/hono` applies at the edge.
+- **Codecs** (e.g. the date codecs `@zodapi/codegen` emits with its `dates` options) only run when
+  validation does, so the client fails fast — before sending — when the effective validate mode
+  would skip a codec-bearing schema: a 2xx response schema with a codec requires `'response'` or
+  `'both'`. Validated codec-bearing request data is re-encoded to its wire form (a date-only codec
+  stays `YYYY-MM-DD` instead of being `JSON.stringify`'d as a full datetime). With
+  `encodeRequests: true` (client-level or per call, flipping the request arg types from `z.input`
+  to `z.output`) you pass decoded values — `Date` objects — and the client `z.encode`s them;
+  codec-bearing request schemas then also require request validation. `z.encode` rejects one-way
+  transforms, so a schema mixing a codec with `queryArray()` cannot be encoded.
 
 ## Axios
 
