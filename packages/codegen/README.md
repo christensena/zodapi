@@ -21,9 +21,8 @@ const source = generateContract(JSON.parse(await readFile('openapi.json', 'utf8'
 
 One file, importing only `zod` and `@zodapi/core`:
 
-- an exported const per `components/schemas` entry — component name = const name, registered via
-  `.meta({ id })` so the schemas re-serialize as the same `$ref` components; recursive schemas use
-  zod 4 shape getters
+- an exported const per `components/schemas` entry — component name = const name; recursive
+  schemas use zod 4 shape getters
 - an exported const per operation, a plain object `satisfies RouteDef` — `operationId` becomes the
   client `alias` (no alias without one); the spec's declared responses are taken verbatim, nothing
   (like the zodapi `400`) is injected
@@ -34,6 +33,21 @@ One file, importing only `zod` and `@zodapi/core`:
 - with `exportTypes: true` (CLI `--export-types`), a `type <Name> = z.infer<typeof <Name>>` alias
   alongside each component const (the zodios codegen convention). `z.infer` is the output side —
   use `z.input<typeof <Name>>` where the wire form differs (e.g. date codecs)
+
+## Documentation output
+
+The spec's documentation (`title`, `description`, `examples`, `deprecated`, operation
+summaries/tags) is emitted per `docs: 'jsdoc' | 'meta' | 'none'` (CLI `--docs <mode>`):
+
+- `'jsdoc'` (default): JSDoc comments on component consts, object properties, parameters, and
+  route consts (summary/description body plus a `@tags` line) — hover docs in the editor, zero
+  runtime weight. No `.meta()` calls, no route doc fields.
+- `'meta'`: full fidelity — runtime `.meta({...})` calls, `.meta({ id })` component registration
+  (so the schemas re-serialize as the same `$ref` components), and `operationId`/`summary`/
+  `description`/`tags` fields on route objects. Use this when you regenerate a spec from the
+  contract.
+- `'none'`: documentation is dropped entirely. `default` values, response descriptions, and
+  `alias` are structural and kept in every mode.
 
 Query parameters typed `array` are declared with `queryArray(item)` from `@zodapi/core`, matching
 the zodapi `a[]=` convention.
@@ -78,8 +92,9 @@ consts, string formats (`email`, `uuid`, `uri`, `date-time`, ...), numeric/strin
 constraints, defaults, and `description`/`title`/`examples` metadata.
 
 It is enforced by a round-trip test: a comprehensive hand-written contract is serialized to
-OpenAPI, fed through the generator, and the document emitted from the generated contract must
-deep-equal the original.
+OpenAPI, fed through the generator with `docs: 'meta'`, and the document emitted from the
+generated contract must deep-equal the original. (`'jsdoc'`/`'none'` contracts are deliberately
+lossy — no component ids, no runtime metadata — so only `'meta'` round-trips.)
 
 ## Not covered
 

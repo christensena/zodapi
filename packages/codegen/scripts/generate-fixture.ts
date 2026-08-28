@@ -1,5 +1,5 @@
 #!/usr/bin/env tsx
-// Regenerates test/fixture/generated.ts and generated-dates.ts from the
+// Regenerates the committed test/fixture/generated*.ts files from the
 // fixture contract's OpenAPI doc.
 import { writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -11,7 +11,11 @@ import { routes } from '../test/fixture/contract.js'
 const doc = buildDoc(routes)
 for (const [file, options] of [
   ['generated.ts', undefined],
-  ['generated-dates.ts', { dates: { datetime: true, date: true }, exportTypes: true }],
+  ['generated-meta.ts', { docs: 'meta' }],
+  [
+    'generated-dates.ts',
+    { dates: { datetime: true, date: true }, exportTypes: true, docs: 'meta' },
+  ],
 ] as const) {
   const out = fileURLToPath(new URL(`../test/fixture/${file}`, import.meta.url))
   writeFileSync(out, generateContract(doc, options))

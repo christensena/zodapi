@@ -2,9 +2,15 @@
 import type { RouteDef } from '@zodapi/core'
 import { queryArray } from '@zodapi/core'
 import { z } from 'zod'
-export const Role = z.enum(["admin", "member", "guest"])
+type GeneratedRoute = RouteDef & {
+  operationId?: string
+  summary?: string
+  description?: string
+  tags?: readonly string[]
+}
 
-/** A registered user */
+export const Role = z.enum(["admin", "member", "guest"]).meta({ id: "Role" })
+
 export const User = z.object({
   id: z.uuid(),
   email: z.email(),
@@ -17,7 +23,7 @@ export const User = z.object({
   createdAt: z.iso.datetime(),
   birthDate: z.iso.date().optional(),
   tags: z.array(z.string()).min(1).max(10),
-})
+}).meta({ id: "User", description: "A registered user" })
 
 export const ValidationError = z.looseObject({
   type: z.enum(["urn:zodapi:validation"]),
@@ -28,66 +34,64 @@ export const ValidationError = z.looseObject({
     path: z.array(z.union([z.string(), z.number()])),
     message: z.string(),
   })),
-})
+}).meta({ id: "ValidationError" })
 
 export const NotFound = z.object({
   error: z.object({
     code: z.enum(["NOT_FOUND"]),
     message: z.string(),
   }),
-})
+}).meta({ id: "NotFound" })
 
-export const Labels = z.record(z.string(), z.string())
+export const Labels = z.record(z.string(), z.string()).meta({ id: "Labels" })
 
 export const Category = z.object({
   name: z.string(),
   get children() {
     return z.array(Category)
   },
-})
+}).meta({ id: "Category" })
 
 export const Widget = z.object({
   kind: z.enum(["widget"]),
   size: z.number(),
-})
+}).meta({ id: "Widget" })
 
 export const Gadget = z.object({
   kind: z.enum(["gadget"]),
   color: z.string(),
-})
+}).meta({ id: "Gadget" })
 
-export const Product = z.union([Widget, Gadget])
+export const Product = z.union([Widget, Gadget]).meta({ id: "Product" })
 
 export const UserCreated = z.object({
   type: z.enum(["user.created"]),
   user: User,
-})
+}).meta({ id: "UserCreated" })
 
 export const UserDeleted = z.object({
   type: z.enum(["user.deleted"]),
   userId: z.uuid(),
-})
+}).meta({ id: "UserDeleted" })
 
-export const Event = z.discriminatedUnion("type", [UserCreated, UserDeleted])
+export const Event = z.discriminatedUnion("type", [UserCreated, UserDeleted]).meta({ id: "Event" })
 
 export const Timestamps = z.object({
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
-})
+}).meta({ id: "Timestamps" })
 
 export const AuditedNote = z.intersection(z.object({
   text: z.string(),
-}), Timestamps)
+}), Timestamps).meta({ id: "AuditedNote" })
 
-/**
- * Fetch one user
- *
- * @tags users
- */
 export const getUser = {
   method: "get",
   path: "/users/{id}",
   alias: "getUser",
+  operationId: "getUser",
+  summary: "Fetch one user",
+  tags: ["users"],
   request: {
     params: z.object({
       id: z.uuid(),
@@ -122,7 +126,7 @@ export const getUser = {
       },
     },
   },
-} as const satisfies RouteDef
+} as const satisfies GeneratedRoute
 
 export const deleteUsersId = {
   method: "delete",
@@ -148,19 +152,19 @@ export const deleteUsersId = {
       },
     },
   },
-} as const satisfies RouteDef
+} as const satisfies GeneratedRoute
 
 export const listUsers = {
   method: "get",
   path: "/users",
   alias: "listUsers",
+  operationId: "listUsers",
   request: {
     query: z.object({
       limit: z.int().min(1).max(100).default(20).optional(),
       role: Role.optional(),
       tags: queryArray(z.string()).optional(),
-      /** Free-text filter */
-      search: z.string().optional(),
+      search: z.string().meta({ description: "Free-text filter" }).optional(),
       since: z.iso.datetime().optional(),
     }),
   },
@@ -186,7 +190,7 @@ export const listUsers = {
       },
     },
   },
-} as const satisfies RouteDef
+} as const satisfies GeneratedRoute
 
 export const postUsers = {
   method: "post",
@@ -240,7 +244,7 @@ export const postUsers = {
       },
     },
   },
-} as const satisfies RouteDef
+} as const satisfies GeneratedRoute
 
 export const getCategories = {
   method: "get",
@@ -263,7 +267,7 @@ export const getCategories = {
       },
     },
   },
-} as const satisfies RouteDef
+} as const satisfies GeneratedRoute
 
 export const getProducts = {
   method: "get",
@@ -286,7 +290,7 @@ export const getProducts = {
       },
     },
   },
-} as const satisfies RouteDef
+} as const satisfies GeneratedRoute
 
 export const getEvents = {
   method: "get",
@@ -309,7 +313,7 @@ export const getEvents = {
       },
     },
   },
-} as const satisfies RouteDef
+} as const satisfies GeneratedRoute
 
 export const getReportsYearExport = {
   method: "get",
@@ -344,12 +348,13 @@ export const getReportsYearExport = {
       },
     },
   },
-} as const satisfies RouteDef
+} as const satisfies GeneratedRoute
 
 export const getNotes = {
   method: "get",
   path: "/notes",
   alias: "getNotes",
+  operationId: "getNotes",
   responses: {
     200: {
       description: "ok",
@@ -368,7 +373,7 @@ export const getNotes = {
       },
     },
   },
-} as const satisfies RouteDef
+} as const satisfies GeneratedRoute
 
 export const routes = [
   getUser,

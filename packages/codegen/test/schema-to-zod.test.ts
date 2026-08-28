@@ -275,3 +275,91 @@ describe('generateContract', () => {
     expect(source).not.toContain('alias:')
   })
 })
+
+describe('docs modes', () => {
+  const documented = {
+    type: 'object',
+    properties: {
+      name: { type: 'string', description: 'Display name', deprecated: true },
+    },
+    required: ['name'],
+    description: 'A thing',
+  }
+
+  it('convertSchema defaults to meta for direct callers', () => {
+    expect(code({ type: 'string', description: 'A thing', default: 'x' })).toBe(
+      'z.string().default("x").meta({ description: "A thing" })',
+    )
+  })
+
+  it('jsdoc mode emits property JSDoc and no .meta, keeping .default', () => {
+    const jsdoc = convertSchema(documented, { ...ctx, docs: 'jsdoc' }).code
+    expect(jsdoc).not.toContain('.meta(')
+    expect(jsdoc).toContain('* Display name')
+    expect(jsdoc).toContain('@deprecated')
+    expect(convertSchema({ type: 'string', default: 'x' }, { ...ctx, docs: 'jsdoc' }).code).toBe(
+      'z.string().default("x")',
+    )
+  })
+
+  it('none mode drops documentation entirely', () => {
+    const none = convertSchema(documented, { ...ctx, docs: 'none' }).code
+    expect(none).not.toContain('.meta(')
+    expect(none).not.toContain('/**')
+  })
+
+  const doc = {
+    openapi: '3.1.0',
+    components: { schemas: { Thing: documented } },
+    paths: {
+      '/things': {
+        get: {
+          operationId: 'listThings',
+          summary: 'List things',
+          tags: ['things'],
+          parameters: [
+            { name: 'q', in: 'query', description: 'Free-text filter', schema: { type: 'string' } },
+          ],
+          responses: {
+            200: {
+              description: 'ok',
+              content: {
+                'application/json': { schema: { $ref: '#/components/schemas/Thing' } },
+              },
+            },
+          },
+        },
+      },
+    },
+  }
+
+  it('generateContract defaults to jsdoc', () => {
+    const source = generateContract(doc)
+    expect(source).toContain('/** A thing */\nexport const Thing')
+    expect(source).toContain('/** Free-text filter */')
+    expect(source).toContain('@tags things')
+    expect(source).toContain('alias: "listThings"')
+    expect(source).toContain('satisfies RouteDef')
+    expect(source).not.toContain('.meta(')
+    expect(source).not.toContain('operationId:')
+    expect(source).not.toContain('summary:')
+    expect(source).not.toContain('GeneratedRoute')
+  })
+
+  it('meta mode keeps runtime metadata, ids, and route doc fields', () => {
+    const source = generateContract(doc, { docs: 'meta' })
+    expect(source).toContain('.meta({ id: "Thing", description: "A thing" })')
+    expect(source).toContain('operationId: "listThings"')
+    expect(source).toContain('summary: "List things"')
+    expect(source).toContain('satisfies GeneratedRoute')
+    expect(source).not.toContain('/** A thing */')
+  })
+
+  it('none mode emits neither', () => {
+    const source = generateContract(doc, { docs: 'none' })
+    expect(source).not.toContain('.meta(')
+    expect(source).not.toContain('/**')
+    expect(source).not.toContain('summary:')
+    expect(source).toContain('alias: "listThings"')
+  })
+})

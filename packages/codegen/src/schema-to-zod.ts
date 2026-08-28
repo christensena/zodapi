@@ -20,6 +20,14 @@ export interface DatesOptions {
 
 export type DateCodecKind = 'datetime' | 'date'
 
+/**
+ * How OpenAPI documentation keywords (`title`, `description`, `examples`,
+ * `deprecated`, operation summaries/tags) appear in the generated source:
+ * `'meta'` as runtime `.meta({...})` calls and route fields, `'jsdoc'` as
+ * JSDoc comments, `'none'` not at all.
+ */
+export type DocsMode = 'meta' | 'jsdoc' | 'none'
+
 export interface ConvertContext {
   /** Resolve a `$ref` to a generated identifier; `forward` when the target is not yet declared. */
   resolveRef(ref: string): { ident: string; forward: boolean }
@@ -29,6 +37,8 @@ export interface ConvertContext {
   dates?: DatesOptions | undefined
   /** Identifier of the shared date codec for `kind`, registering it as used. */
   dateCodec?: ((kind: DateCodecKind) => string) | undefined
+  /** Documentation output mode; absent → `'meta'`. */
+  docs?: DocsMode | undefined
 }
 
 /** A zod expression plus whether it references an identifier declared later in the file. */
@@ -157,6 +167,9 @@ function objectExpr(schema: JsonSchema, ctx: ConvertContext, indent: string): Ex
     const prop = convertSchema(propSchema, ctx, inner)
     const withOptional = required.has(key) ? prop.code : `${prop.code}.optional()`
     const name = /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(key) ? key : json(key)
+    if (ctx.docs === 'jsdoc' && isSchemaObject(propSchema)) {
+      entries.push(...schemaJsdoc(propSchema, inner))
+    }
     // Forward references must be deferred; zod object shapes support getters for this.
     entries.push(
       prop.forward
@@ -358,9 +371,10 @@ function baseExpr(schema: JsonSchema, ctx: ConvertContext, indent: string): Expr
 }
 
 /** Metadata keywords carried through `.meta()` / `.default()` rather than validation. */
-function metaSuffix(schema: JsonSchema, skipDefault: boolean): string {
+function metaSuffix(schema: JsonSchema, skipDefault: boolean, docs: DocsMode): string {
   let code = ''
   if (!skipDefault && 'default' in schema) code += `.default(${json(schema['default'])})`
+  if (docs !== 'meta') return code
   const meta: string[] = []
   if (typeof schema['title'] === 'string') meta.push(`title: ${json(schema['title'])}`)
   if (typeof schema['description'] === 'string') {
@@ -372,13 +386,43 @@ function metaSuffix(schema: JsonSchema, skipDefault: boolean): string {
   return code
 }
 
+/** A `/** ... *\/` block from body lines plus `@tag` lines, or `[]` when both are empty. */
+export function jsdocLines(body: string[], tags: string[], indent: string): string[] {
+  const lines = [...body, ...(body.length > 0 && tags.length > 0 ? [''] : []), ...tags].map((l) =>
+    l.replaceAll('*/', '*\\/'),
+  )
+  if (lines.length === 0) return []
+  if (lines.length === 1) return [`${indent}/** ${lines[0]} */`]
+  return [
+    `${indent}/**`,
+    ...lines.map((l) => `${indent} *${l === '' ? '' : ` ${l}`}`),
+    `${indent} */`,
+  ]
+}
+
+/** JSDoc comment lines for a schema's documentation keywords, or `[]` when it has none. */
+export function schemaJsdoc(schema: JsonSchema, indent: string): string[] {
+  const body: string[] = []
+  if (typeof schema['title'] === 'string') body.push(schema['title'])
+  if (typeof schema['description'] === 'string') {
+    if (body.length > 0) body.push('')
+    body.push(...schema['description'].split('\n'))
+  }
+  const tags: string[] = []
+  if (schema['deprecated'] === true) tags.push('@deprecated')
+  if (Array.isArray(schema['examples'])) {
+    for (const example of schema['examples']) tags.push(`@example ${json(example)}`)
+  }
+  return jsdocLines(body, tags, indent)
+}
+
 export function convertSchema(schema: unknown, ctx: ConvertContext, indent = ''): Expr {
   if (schema === true) return lit('z.unknown()')
   if (schema === false) return lit('z.never()')
   if (!isSchemaObject(schema)) throw new Error(`expected a schema object, got ${json(schema)}`)
   const base = baseExpr(schema, ctx, indent)
   return {
-    code: base.code + metaSuffix(schema, base.defaultHandled === true),
+    code: base.code + metaSuffix(schema, base.defaultHandled === true, ctx.docs ?? 'meta'),
     forward: base.forward,
   }
 }

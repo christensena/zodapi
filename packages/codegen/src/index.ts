@@ -9,6 +9,7 @@ export {
   type ConvertContext,
   type DateCodecKind,
   type DatesOptions,
+  type DocsMode,
   type Expr,
   type JsonSchema,
 } from './schema-to-zod.js'
