@@ -100,6 +100,12 @@ type BaseArgs<R extends RouteDef, M extends RequestIO> = ParamsArg<R, M> &
      * `'retry'` to re-run the request — see {@link OnError}.
      */
     onError?: OnError
+    /**
+     * Override the client-level `fullResponse` mode for this call: `true`
+     * resolves with a {@link FullResponse} envelope (`data` + `status` +
+     * `headers`) instead of the bare body; `false` opts back out.
+     */
+    fullResponse?: boolean
   }
 
 type EncodeFlag<M extends RequestIO> = M extends 'output' ? true : false
@@ -130,20 +136,56 @@ type RouteFor<Rs extends readonly RouteDef[], M extends Method, P extends string
   { method: M; path: P }
 >
 
-export type MethodCallers<Rs extends readonly RouteDef[], IO extends RequestIO = 'input'> = {
-  [M in Rs[number]['method']]: <P extends PathsFor<Rs, M>>(
-    path: P,
-    ...args: ArgsTuple<RouteFor<Rs, M, P>, IO>
-  ) => Promise<SuccessData<RouteFor<Rs, M, P>>>
+/**
+ * What a call resolves with in `fullResponse` mode: the parsed (and, with
+ * codecs, decoded) body plus the raw response's status and headers.
+ */
+export interface FullResponse<R extends RouteDef> {
+  data: SuccessData<R>
+  status: number
+  headers: Headers
 }
 
-export type AliasCallers<Rs extends readonly RouteDef[], IO extends RequestIO = 'input'> = {
-  [R in Rs[number] as R extends { alias: infer A extends string } ? A : never]: (
-    ...args: ArgsTuple<R, IO>
-  ) => Promise<SuccessData<R>>
+type CallResult<R extends RouteDef, F extends boolean> = F extends true
+  ? FullResponse<R>
+  : SuccessData<R>
+
+type Not<F extends boolean> = F extends true ? false : true
+
+/**
+ * Two call signatures per route: the first flips the client-level
+ * `fullResponse` mode via an explicit literal flag, the second follows it.
+ */
+export type MethodCallers<
+  Rs extends readonly RouteDef[],
+  IO extends RequestIO = 'input',
+  F extends boolean = false,
+> = {
+  [M in Rs[number]['method']]: {
+    <P extends PathsFor<Rs, M>>(
+      path: P,
+      args: RequestArgs<RouteFor<Rs, M, P>, IO> & { fullResponse: Not<F> },
+    ): Promise<CallResult<RouteFor<Rs, M, P>, Not<F>>>
+    <P extends PathsFor<Rs, M>>(
+      path: P,
+      ...args: ArgsTuple<RouteFor<Rs, M, P>, IO>
+    ): Promise<CallResult<RouteFor<Rs, M, P>, F>>
+  }
+}
+
+export type AliasCallers<
+  Rs extends readonly RouteDef[],
+  IO extends RequestIO = 'input',
+  F extends boolean = false,
+> = {
+  [R in Rs[number] as R extends { alias: infer A extends string } ? A : never]: {
+    (args: RequestArgs<R, IO> & { fullResponse: Not<F> }): Promise<CallResult<R, Not<F>>>
+    (...args: ArgsTuple<R, IO>): Promise<CallResult<R, F>>
+  }
 }
 
 export type ZodapiClient<
   Rs extends readonly RouteDef[],
   IO extends RequestIO = 'input',
-> = MethodCallers<Rs, IO> & AliasCallers<Rs, IO>
+  F extends boolean = false,
+> = MethodCallers<Rs, IO, F> & AliasCallers<Rs, IO, F>

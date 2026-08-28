@@ -35,6 +35,7 @@ createClient(routes, {
   baseUrl: 'http://localhost:3000',
   validate: 'response', // 'none' | 'request' | 'response' | 'both' (default 'response')
   encodeRequests: false, // pass decoded (z.output) request values, encoded to the wire via z.encode
+  fullResponse: false, // resolve with { data, status, headers } instead of the bare body
   headers: () => ({ authorization: `Bearer ${token}` }), // static object or (async) function
   adapter: fetchAdapter(), // transport seam
   decoders: decodersFor(problemFlavor), // error decoders (default: zodapi's own 400)
@@ -70,6 +71,10 @@ createClient(routes, {
   concern independent of `validate`, though `z.encode` validates as it encodes, so an invalid
   value throws `RequestValidationError` even with request validation off. `z.encode` rejects
   one-way transforms, so a schema mixing a codec with `queryArray()` cannot be encoded.
+- **Raw response access** goes through `fullResponse` (client-level default, or per call in either
+  direction): the call resolves with `{ data, status, headers }` — `data` validated/decoded exactly
+  as without the envelope, `headers` the raw `Headers` — for pagination headers, tests, and the
+  like. Non-2xx responses already carry `status`/`headers`/`data` on the thrown `ApiError`.
 - **Retries** go through `onError` (client-level, or per call to replace it): the hook receives
   `{ error, route, alias, attempt }` before an error is thrown and may return `'retry'` (sync or
   async) to re-run the request. The `headers` function is re-evaluated on every attempt, so an

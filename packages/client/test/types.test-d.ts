@@ -1,6 +1,7 @@
 import {
   createClient,
   type ApiErrorOf,
+  type FullResponse,
   type OnError,
   matchErrorByStatus,
   isErrorFromRoute,
@@ -18,7 +19,10 @@ describe('client type inference', () => {
     expectTypeOf(client.get<'/things/{id}'>)
       .parameter(1)
       .toExtend<{ params: { id: string } } | undefined>()
-    expectTypeOf(client.getThing).returns.resolves.toEqualTypeOf<{ id: string; name: string }>()
+    expectTypeOf(client.getThing({ params: { id: '1' } })).resolves.toEqualTypeOf<{
+      id: string
+      name: string
+    }>()
     expectTypeOf(client.createThing).parameter(0).toExtend<{ body: { name: string } } | undefined>()
   })
 
@@ -90,7 +94,10 @@ describe('date codec typing', () => {
   })
 
   it('responses decode to Date', () => {
-    expectTypeOf(codecClient.getEvent).returns.resolves.toEqualTypeOf<{ id: string; at: Date }>()
+    expectTypeOf(codecClient.getEvent({ params: { id: '1' } })).resolves.toEqualTypeOf<{
+      id: string
+      at: Date
+    }>()
     expectTypeOf<SuccessData<typeof getEvent>>().toEqualTypeOf<{ id: string; at: Date }>()
   })
 
@@ -111,6 +118,28 @@ describe('date codec typing', () => {
 
     type EncArgs = Parameters<typeof encodeClient.createEvent>[0]
     expectTypeOf<{ body: { at: string }; encodeRequests: false }>().toExtend<EncArgs>()
+  })
+})
+
+describe('fullResponse typing', () => {
+  it('per-call fullResponse: true flips the resolved type to the envelope', () => {
+    expectTypeOf(
+      client.getThing({ params: { id: '1' }, fullResponse: true }),
+    ).resolves.toEqualTypeOf<FullResponse<typeof getThing>>()
+    expectTypeOf(client.getThing({ params: { id: '1' } })).resolves.toEqualTypeOf<{
+      id: string
+      name: string
+    }>()
+  })
+
+  it('client-level fullResponse: true makes the envelope the default', () => {
+    const fullClient = createClient(routes, { baseUrl: 'http://test.local', fullResponse: true })
+    expectTypeOf(fullClient.getThing({ params: { id: '1' } })).resolves.toEqualTypeOf<
+      FullResponse<typeof getThing>
+    >()
+    expectTypeOf(
+      fullClient.getThing({ params: { id: '1' }, fullResponse: false }),
+    ).resolves.toEqualTypeOf<{ id: string; name: string }>()
   })
 })
 

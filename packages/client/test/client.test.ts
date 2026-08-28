@@ -480,3 +480,42 @@ describe('onError retry hook', () => {
     expect(calls).toHaveLength(0)
   })
 })
+
+describe('fullResponse envelope', () => {
+  it('resolves with data, status and headers per call', async () => {
+    const client = makeClient()
+    const result = await client.getThing({ params: { id: '9' }, fullResponse: true })
+    expect(result.data).toEqual({ id: '9', name: 'thing-9' })
+    expect(result.status).toBe(200)
+    expect(result.headers).toBeInstanceOf(Headers)
+    expect(result.headers.get('content-type')).toMatch(/json/)
+  })
+
+  it('honours a client-level default with per-call opt-out', async () => {
+    const counters = { createCalls: 0 }
+    const app = makeApp(counters)
+    const client = createClient(routes, {
+      baseUrl: 'http://test.local',
+      adapter: fetchAdapter(app.request as unknown as typeof fetch),
+      fullResponse: true,
+    })
+    const full = await client.getThing({ params: { id: '3' } })
+    expect(full.data.name).toBe('thing-3')
+    expect(full.status).toBe(200)
+    const bare = await client.getThing({ params: { id: '3' }, fullResponse: false })
+    expect(bare).toEqual({ id: '3', name: 'thing-3' })
+  })
+
+  it('still decodes codecs inside the envelope', async () => {
+    const adapter: Adapter = () =>
+      Promise.resolve({
+        status: 200,
+        headers: new Headers({ 'content-type': 'application/json', 'x-total': '42' }),
+        text: JSON.stringify({ id: '1', at: '2024-01-02T03:04:05.000Z' }),
+      })
+    const client = createClient(codecRoutes, { baseUrl: 'http://test.local', adapter })
+    const result = await client.getEvent({ params: { id: '1' }, fullResponse: true })
+    expect(result.data.at).toBeInstanceOf(Date)
+    expect(result.headers.get('x-total')).toBe('42')
+  })
+})

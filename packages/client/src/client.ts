@@ -50,6 +50,14 @@ export interface ClientOptions {
    */
   encodeRequests?: boolean
   /**
+   * Resolve calls with a `FullResponse` envelope — `{ data, status, headers }`
+   * — instead of the bare parsed body, for consumers that need the raw
+   * response's status or headers (pagination headers, tests, ...). `data` is
+   * still validated/decoded exactly as without the envelope. Defaults to
+   * false. Overridable per call in either direction.
+   */
+  fullResponse?: boolean
+  /**
    * Error hook with a retry decision, called whenever a call is about to
    * throw. Return `'retry'` (may be async) to re-run the request; any other
    * return value — or a throw from the hook itself — lets the original error
@@ -85,6 +93,7 @@ interface AnyArgs {
   signal?: AbortSignal | undefined
   validate?: ValidateMode | undefined
   encodeRequests?: boolean | undefined
+  fullResponse?: boolean | undefined
   onError?: OnError | undefined
 }
 
@@ -142,15 +151,21 @@ function assertNoCodecInSuccessResponses(route: RouteDef): void {
 export function createClient<const Rs extends readonly RouteDef[], const O extends ClientOptions>(
   routes: Rs,
   options: O,
-): ZodapiClient<Rs, O extends { encodeRequests: true } ? 'output' : 'input'> {
+): ZodapiClient<
+  Rs,
+  O extends { encodeRequests: true } ? 'output' : 'input',
+  O extends { fullResponse: true } ? true : false
+> {
   const adapter = options.adapter ?? fetchAdapter()
   const defaultValidate = options.validate ?? 'response'
   const defaultEncodeRequests = options.encodeRequests ?? false
+  const defaultFullResponse = options.fullResponse ?? false
   const decoders = options.decoders ?? [zodapiValidationDecoder]
 
   const call = async (route: RouteDef, args: AnyArgs = {}): Promise<unknown> => {
     const validate = args.validate ?? defaultValidate
     const encodeRequests = args.encodeRequests ?? defaultEncodeRequests
+    const fullResponse = args.fullResponse ?? defaultFullResponse
     const onError = args.onError ?? options.onError
     const validateRequest = validate === 'request' || validate === 'both'
     const validateResponse = validate === 'response' || validate === 'both'
@@ -234,15 +249,17 @@ export function createClient<const Rs extends readonly RouteDef[], const O exten
         if (!match) {
           throw new UnexpectedResponseApiError(route, response.status, data, response.headers)
         }
+        const resolve = (body: unknown): unknown =>
+          fullResponse ? { data: body, status: response.status, headers: response.headers } : body
         const schema = jsonSchemaOfResponse(match.def)
         if (schema && validateResponse) {
           const result = schema.safeParse(data)
           if (!result.success) {
             throw new ResponseValidationError(response.status, result.error, data)
           }
-          return result.data
+          return resolve(result.data)
         }
-        return data
+        return resolve(data)
       }
       const decoded = decodeError(decoders, {
         route,
@@ -284,5 +301,9 @@ export function createClient<const Rs extends readonly RouteDef[], const O exten
       return call(route, args)
     }
   }
-  return client as ZodapiClient<Rs, O extends { encodeRequests: true } ? 'output' : 'input'>
+  return client as ZodapiClient<
+    Rs,
+    O extends { encodeRequests: true } ? 'output' : 'input',
+    O extends { fullResponse: true } ? true : false
+  >
 }

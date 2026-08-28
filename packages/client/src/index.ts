@@ -4,6 +4,7 @@ export type {
   AliasCallers,
   ArgsTuple,
   ErrorContext,
+  FullResponse,
   MethodCallers,
   OnError,
   RequestArgs,
