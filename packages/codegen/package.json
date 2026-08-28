@@ -1,6 +1,6 @@
 {
   "name": "@zodapi/codegen",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Generate a zodapi contract (zod schemas + route defs) from an OpenAPI 3.1 document",
   "license": "MIT",
   "bin": {
