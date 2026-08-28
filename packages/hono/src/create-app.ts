@@ -1,5 +1,5 @@
 import { OpenAPIHono, type OpenAPIHonoOptions } from '@hono/zod-openapi'
-import { validationErrorBody } from '@zodapi/core'
+import { PROBLEM_JSON_CONTENT_TYPE, validationErrorBody } from '@zodapi/core'
 import type { Env, Hono } from 'hono'
 
 /**
@@ -23,7 +23,8 @@ export type CreateAppInit<E extends Env> = ConstructorParameters<typeof Hono>[0]
 
 /**
  * An `OpenAPIHono` whose validation failures respond `400` with the fixed
- * `ValidationError` shape from `@zodapi/core`, and whose edge accepts the
+ * `ValidationError` problem-details shape from `@zodapi/core` (served as
+ * `application/problem+json`), and whose edge accepts the
  * `a[]=` query-array convention. Pass your own `defaultHook` to override the
  * error shape. Note: the `[]` normalization lives on this app's `fetch`, so it
  * does not apply when the app is mounted under another Hono app via `.route()`.
@@ -35,7 +36,9 @@ export function createApp<E extends Env = Env>(init?: CreateAppInit<E>): OpenAPI
       init?.defaultHook ??
       ((result, c) => {
         if (!result.success) {
-          return c.json(validationErrorBody(result.target, result.error), 400)
+          return c.json(validationErrorBody(result.target, result.error), 400, {
+            'content-type': PROBLEM_JSON_CONTENT_TYPE,
+          })
         }
       }),
   })

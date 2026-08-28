@@ -28,6 +28,9 @@ One file, importing only `zod` and `@zodapi/core`:
   client `alias` (no alias without one); the spec's declared responses are taken verbatim, nothing
   (like the zodapi `400`) is injected
 - a `routes` tuple ready for `createClient(routes)` from `@zodapi/client`
+- a `problemFlavor` const (`'zodapi' | 'problem-details' | undefined`, detected from the spec's
+  error responses — zodapi's `urn:zodapi:validation` problem type, or an ASP.NET-style
+  `ValidationProblemDetails`) to feed `decodersFor(problemFlavor)` when creating the client
 
 Query parameters typed `array` are declared with `queryArray(item)` from `@zodapi/core`, matching
 the zodapi `a[]=` convention.

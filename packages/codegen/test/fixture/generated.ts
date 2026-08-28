@@ -24,16 +24,15 @@ export const User = z.object({
   tags: z.array(z.string()).min(1).max(10),
 }).meta({ id: "User", description: "A registered user" })
 
-export const ValidationError = z.object({
-  error: z.object({
-    code: z.enum(["VALIDATION"]),
-    target: z.enum(["json", "form", "query", "param", "header", "cookie"]),
-    issues: z.array(z.looseObject({
-      code: z.string(),
-      path: z.array(z.union([z.string(), z.number()])),
-      message: z.string(),
-    })),
-  }),
+export const ValidationError = z.looseObject({
+  type: z.enum(["urn:zodapi:validation"]),
+  status: z.literal(400),
+  target: z.enum(["json", "form", "query", "param", "header", "cookie"]),
+  issues: z.array(z.looseObject({
+    code: z.string(),
+    path: z.array(z.union([z.string(), z.number()])),
+    message: z.string(),
+  })),
 }).meta({ id: "ValidationError" })
 
 export const NotFound = z.object({
@@ -100,7 +99,7 @@ export const getUser = {
     400: {
       description: "Request validation failed",
       content: {
-        "application/json": {
+        "application/problem+json": {
           schema: ValidationError,
         },
       },
@@ -134,7 +133,7 @@ export const deleteUsersId = {
     400: {
       description: "Request validation failed",
       content: {
-        "application/json": {
+        "application/problem+json": {
           schema: ValidationError,
         },
       },
@@ -171,7 +170,7 @@ export const listUsers = {
     400: {
       description: "Request validation failed",
       content: {
-        "application/json": {
+        "application/problem+json": {
           schema: ValidationError,
         },
       },
@@ -212,7 +211,7 @@ export const postUsers = {
     400: {
       description: "Request validation failed",
       content: {
-        "application/json": {
+        "application/problem+json": {
           schema: ValidationError,
         },
       },
@@ -247,7 +246,7 @@ export const getCategories = {
     400: {
       description: "Request validation failed",
       content: {
-        "application/json": {
+        "application/problem+json": {
           schema: ValidationError,
         },
       },
@@ -270,7 +269,7 @@ export const getProducts = {
     400: {
       description: "Request validation failed",
       content: {
-        "application/json": {
+        "application/problem+json": {
           schema: ValidationError,
         },
       },
@@ -305,7 +304,7 @@ export const getReportsYearExport = {
     400: {
       description: "Request validation failed",
       content: {
-        "application/json": {
+        "application/problem+json": {
           schema: ValidationError,
         },
       },
@@ -330,7 +329,7 @@ export const getNotes = {
     400: {
       description: "Request validation failed",
       content: {
-        "application/json": {
+        "application/problem+json": {
           schema: ValidationError,
         },
       },
@@ -348,3 +347,5 @@ export const routes = [
   getReportsYearExport,
   getNotes,
 ] as const
+
+export const problemFlavor: 'zodapi' | 'problem-details' | undefined = "zodapi"

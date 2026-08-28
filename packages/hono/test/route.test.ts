@@ -103,7 +103,7 @@ describe('route()', () => {
 })
 
 describe('createApp()', () => {
-  it('responds 400 with the fixed shape and documents ValidationError as a component', async () => {
+  it('responds 400 with problem+json and documents ValidationError as a component', async () => {
     const app = createApp()
       .openapi(
         route({
@@ -120,14 +120,17 @@ describe('createApp()', () => {
 
     const bad = await app.request('/items/x')
     expect(bad.status).toBe(400)
+    expect(bad.headers.get('content-type')).toContain('application/problem+json')
     const body = await bad.json()
-    expect(body.error.code).toBe('VALIDATION')
-    expect(body.error.target).toBe('param')
+    expect(body.type).toBe('urn:zodapi:validation')
+    expect(body.status).toBe(400)
+    expect(body.target).toBe('param')
+    expect(body.issues[0]?.path).toEqual(['id'])
 
     const doc = await (await app.request('/openapi.json')).json()
     expect(doc.components.schemas.ValidationError).toBeDefined()
     expect(
-      doc.paths['/items/{id}'].get.responses['400'].content['application/json'].schema,
+      doc.paths['/items/{id}'].get.responses['400'].content['application/problem+json'].schema,
     ).toEqual({ $ref: '#/components/schemas/ValidationError' })
   })
 

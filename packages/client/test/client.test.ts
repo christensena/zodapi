@@ -1,9 +1,13 @@
 import {
+  type Adapter,
   ApiError,
+  ProblemApiError,
   RequestValidationError,
   ResponseValidationError,
-  UnexpectedResponseError,
+  UnexpectedResponseApiError,
+  ValidationApiError,
   createClient,
+  decodersFor,
   fetchAdapter,
   isErrorFromAlias,
   isErrorFromRoute,
@@ -11,6 +15,7 @@ import {
   matchErrorByStatus,
 } from '@zodapi/client'
 import { describe, expect, it } from 'vitest'
+import { z } from 'zod'
 
 import { createThing, getThing, makeApp, routes } from './contract.js'
 
@@ -63,16 +68,36 @@ describe('query serialization (a[] convention)', () => {
 })
 
 describe('the fixed 400 validation error shape', () => {
-  it('surfaces server-side validation failures as ApiError with the fixed shape', async () => {
+  it('decodes a server-side validation failure into ValidationApiError with a real ZodError', async () => {
     const client = makeClient()
     const err = await client.listThings({ query: { limit: 0 } }).catch((e: unknown) => e)
-    expect(err).toBeInstanceOf(ApiError)
+    expect(err).toBeInstanceOf(ValidationApiError)
+    if (err instanceof ValidationApiError) {
+      expect(err.status).toBe(400)
+      expect(err.target).toBe('query')
+      expect(err.error).toBeInstanceOf(z.ZodError)
+      expect(err.error.issues[0]?.path).toEqual(['limit'])
+      expect(z.flattenError(err.error).fieldErrors['limit']).toBeDefined()
+    }
     expect(isValidationError(err)).toBe(true)
     if (isValidationError(err)) {
-      expect(err.data.error.code).toBe('VALIDATION')
-      expect(err.data.error.target).toBe('query')
-      expect(err.data.error.issues[0]?.path).toEqual(['limit'])
+      expect(err.data.type).toBe('urn:zodapi:validation')
+      expect(err.data.target).toBe('query')
     }
+  })
+
+  it('falls back to a plain ApiError when decoders are disabled', async () => {
+    const counters = { createCalls: 0 }
+    const app = makeApp(counters)
+    const client = createClient(routes, {
+      baseUrl: 'http://test.local',
+      adapter: fetchAdapter(app.request as unknown as typeof fetch),
+      decoders: [],
+    })
+    const err = await client.listThings({ query: { limit: 0 } }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(ApiError)
+    expect(err).not.toBeInstanceOf(ValidationApiError)
+    expect(isValidationError(err)).toBe(true)
   })
 })
 
@@ -111,11 +136,87 @@ describe('declared error responses and guards', () => {
 })
 
 describe('undeclared statuses', () => {
-  it('throws UnexpectedResponseError for an undeclared status', async () => {
+  it('throws UnexpectedResponseApiError for an undeclared status', async () => {
     const client = makeClient()
     const err = await client.get('/teapot').catch((e: unknown) => e)
-    expect(err).toBeInstanceOf(UnexpectedResponseError)
-    expect((err as UnexpectedResponseError).status).toBe(418)
+    expect(err).toBeInstanceOf(UnexpectedResponseApiError)
+    expect((err as UnexpectedResponseApiError).status).toBe(418)
+  })
+})
+
+describe('problem-details decoders (foreign backends)', () => {
+  function stubAdapter(
+    status: number,
+    body: unknown,
+    contentType = 'application/problem+json',
+  ): Adapter {
+    return () =>
+      Promise.resolve({
+        status,
+        headers: new Headers({ 'content-type': contentType }),
+        text: JSON.stringify(body),
+      })
+  }
+
+  function makeStubClient(adapter: Adapter, decoders = decodersFor('problem-details')) {
+    return createClient(routes, { baseUrl: 'http://test.local', adapter, decoders })
+  }
+
+  const aspnetValidationProblem = {
+    type: 'https://tools.ietf.org/html/rfc9110#section-15.5.1',
+    title: 'One or more validation errors occurred.',
+    status: 400,
+    errors: {
+      'Customer.Email': ['The Email field is not a valid e-mail address.'],
+      '$.items[0].qty': ['Expected a number.'],
+    },
+  }
+
+  it('maps an ASP.NET ValidationProblemDetails into ValidationApiError with camelCased paths', async () => {
+    const client = makeStubClient(stubAdapter(400, aspnetValidationProblem))
+    const err = await client.getThing({ params: { id: '1' } }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(ValidationApiError)
+    if (err instanceof ValidationApiError) {
+      const paths = err.error.issues.map((issue) => issue.path)
+      expect(paths).toContainEqual(['customer', 'email'])
+      expect(paths).toContainEqual(['items', 0, 'qty'])
+      expect(err.target).toBe('json')
+    }
+  })
+
+  it('honours keyCasing and jsonPathKeys options', async () => {
+    const client = makeStubClient(
+      stubAdapter(400, aspnetValidationProblem),
+      decodersFor('problem-details', { keyCasing: 'preserve', jsonPathKeys: 'preserve' }),
+    )
+    const err = await client.getThing({ params: { id: '1' } }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(ValidationApiError)
+    if (err instanceof ValidationApiError) {
+      const paths = err.error.issues.map((issue) => issue.path)
+      expect(paths).toContainEqual(['Customer', 'Email'])
+      expect(paths).toContainEqual(['$', 'items', 0, 'qty'])
+    }
+  })
+
+  it('decodes a non-validation problem into ProblemApiError, even on an undeclared status', async () => {
+    const problem = { type: 'about:blank', title: 'Service Unavailable', status: 503 }
+    const client = makeStubClient(stubAdapter(503, problem))
+    const err = await client.getThing({ params: { id: '1' } }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(ProblemApiError)
+    if (err instanceof ProblemApiError) {
+      expect(err.problem.title).toBe('Service Unavailable')
+      expect(err.status).toBe(503)
+    }
+  })
+
+  it('does not decode foreign problems unless problemDetails is opted in', async () => {
+    const client = createClient(routes, {
+      baseUrl: 'http://test.local',
+      adapter: stubAdapter(400, aspnetValidationProblem),
+    })
+    const err = await client.getThing({ params: { id: '1' } }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(ApiError)
+    expect(err).not.toBeInstanceOf(ValidationApiError)
   })
 })
 

@@ -1,8 +1,8 @@
 // Run `pnpm dev` in another terminal first, then `pnpm client-demo`.
 import {
+  ValidationApiError,
   createClient,
   isErrorFromRoute,
-  isValidationError,
   matchErrorByStatus,
 } from '@zodapi/client'
 import * as api from '@zodapi/example-api'
@@ -34,17 +34,13 @@ try {
   }
 }
 
-// The fixed 400 validation-error shape
+// Server-side validation failures decode into ValidationApiError carrying a
+// real ZodError — the same error handling as client-side validation.
 try {
   await client.get('/users', { query: { limit: 0 }, validate: 'none' })
 } catch (err) {
-  if (isValidationError(err)) {
-    console.log(
-      '400 validation error on',
-      err.data.error.target,
-      '→',
-      err.data.error.issues[0]?.message,
-    )
+  if (err instanceof ValidationApiError) {
+    console.log('400 validation error on', err.target, '→', err.error.issues[0]?.message)
   } else {
     throw err
   }

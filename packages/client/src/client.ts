@@ -1,11 +1,15 @@
 import {
   ApiError,
+  type ErrorDecoder,
   RequestValidationError,
   ResponseValidationError,
-  UnexpectedResponseError,
+  UnexpectedResponseApiError,
+  decodeError,
   jsonSchemaOfResponse,
+  mediaTypeOf,
   responseDefForStatus,
   type RouteDef,
+  zodapiValidationDecoder,
 } from '@zodapi/core'
 import type { z } from 'zod'
 
@@ -25,6 +29,13 @@ export interface ClientOptions {
   headers?:
     | Record<string, string>
     | (() => Record<string, string> | Promise<Record<string, string>>)
+  /**
+   * Error decoders tried in order against every non-2xx response; the first
+   * decoded error is thrown instead of a plain `ApiError`. Defaults to
+   * zodapi's own problem+json 400 decoder; add `problemDetails(...)` (or use
+   * `decodersFor(...)`) for non-zodapi backends. Pass `[]` to disable.
+   */
+  decoders?: readonly ErrorDecoder[]
 }
 
 interface AnyArgs {
@@ -75,6 +86,7 @@ export function createClient<const Rs extends readonly RouteDef[]>(
 ): ZodapiClient<Rs> {
   const adapter = options.adapter ?? fetchAdapter()
   const defaultValidate = options.validate ?? 'response'
+  const decoders = options.decoders ?? [zodapiValidationDecoder]
 
   const call = async (route: RouteDef, args: AnyArgs = {}): Promise<unknown> => {
     const validate = args.validate ?? defaultValidate
@@ -136,7 +148,7 @@ export function createClient<const Rs extends readonly RouteDef[]>(
     const match = responseDefForStatus(route, response.status)
     if (response.status >= 200 && response.status < 300) {
       if (!match) {
-        throw new UnexpectedResponseError(route, response.status, data, response.headers)
+        throw new UnexpectedResponseApiError(route, response.status, data, response.headers)
       }
       const schema = jsonSchemaOfResponse(match.def)
       if (schema && validateResponse) {
@@ -148,8 +160,16 @@ export function createClient<const Rs extends readonly RouteDef[]>(
       }
       return data
     }
+    const decoded = decodeError(decoders, {
+      route,
+      status: response.status,
+      data,
+      headers: response.headers,
+      mediaType: mediaTypeOf(response.headers.get('content-type')),
+    })
+    if (decoded) throw decoded
     if (match) throw new ApiError(route, response.status, data, response.headers)
-    throw new UnexpectedResponseError(route, response.status, data, response.headers)
+    throw new UnexpectedResponseApiError(route, response.status, data, response.headers)
   }
 
   const client: Record<string, unknown> = {}
