@@ -23,7 +23,9 @@ describe('round trip', () => {
 
   it('generated-dates.ts is up to date (pnpm --filter @zodapi/codegen generate:fixture)', () => {
     const committed = readFileSync(new URL('./fixture/generated-dates.ts', import.meta.url), 'utf8')
-    expect(committed).toBe(generateContract(docA, { dates: { datetime: true, date: true } }))
+    expect(committed).toBe(
+      generateContract(docA, { dates: { datetime: true, date: true }, exportTypes: true }),
+    )
   })
 
   it('the doc built from the dates contract equals the original doc', () => {

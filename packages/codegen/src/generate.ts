@@ -141,6 +141,12 @@ interface ParameterObject {
 export interface GenerateOptions {
   /** Convert ISO date/time strings to `Date` objects via `z.codec`s. */
   dates?: DatesOptions | undefined
+  /**
+   * Also export a `type <Name> = z.infer<typeof <Name>>` alias per component
+   * schema (the zodios codegen convention). `z.infer` is the output side; use
+   * `z.input<typeof <Name>>` where the wire form differs (e.g. date codecs).
+   */
+  exportTypes?: boolean | undefined
 }
 
 const DATE_CODEC_NAMES: Record<DateCodecKind, string> = {
@@ -178,6 +184,8 @@ class Generator {
     },
   }
 
+  private readonly exportTypes: boolean
+
   constructor(
     private readonly doc: JsonSchema,
     options?: GenerateOptions,
@@ -185,6 +193,7 @@ class Generator {
     const components = isObject(doc['components']) ? doc['components'] : {}
     this.schemas = isObject(components['schemas']) ? components['schemas'] : {}
     this.ctx.dates = options?.dates
+    this.exportTypes = options?.exportTypes === true
   }
 
   generate(): string {
@@ -202,7 +211,11 @@ class Generator {
       const expr = convertSchema(schemas[name], this.ctx)
       const code = withMeta(expr.code, [`id: ${json(name)}`])
       this.declared.add(name)
-      return `export const ${this.names.lookup(name)} = ${code}\n`
+      const ident = this.names.lookup(name)
+      const constDecl = `export const ${ident} = ${code}\n`
+      return this.exportTypes
+        ? `${constDecl}export type ${ident} = z.infer<typeof ${ident}>\n`
+        : constDecl
     })
 
     const routeDecls: string[] = []

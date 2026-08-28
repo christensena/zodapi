@@ -251,6 +251,19 @@ describe('generateContract', () => {
     expect(withoutDates).not.toContain('isoDatetimeToDate')
   })
 
+  it('exports z.infer type aliases per component with exportTypes', () => {
+    const doc = {
+      openapi: '3.1.0',
+      components: {
+        schemas: { User: { type: 'object', properties: { name: { type: 'string' } } } },
+      },
+      paths: {},
+    }
+    const withTypes = generateContract(doc, { exportTypes: true })
+    expect(withTypes).toContain('export type User = z.infer<typeof User>')
+    expect(generateContract(doc)).not.toContain('export type User')
+  })
+
   it('falls back to method + path for the const name and omits the alias', () => {
     const source = generateContract({
       openapi: '3.1.0',

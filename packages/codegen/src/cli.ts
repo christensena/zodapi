@@ -10,16 +10,19 @@ function fail(message: string): never {
 }
 
 const USAGE =
-  'Usage: zodapi-codegen <openapi.json> [-o contract.ts] [--dates-datetime] [--dates-date] [--dates-offset]'
+  'Usage: zodapi-codegen <openapi.json> [-o contract.ts] [--export-types] [--dates-datetime] [--dates-date] [--dates-offset]'
 
 const args = process.argv.slice(2)
 let input: string | undefined
 let output: string | undefined
+let exportTypes = false
 const dates: DatesOptions = {}
 for (let i = 0; i < args.length; i++) {
   const arg = args[i]
   if (arg === '-o' || arg === '--output') {
     output = args[++i] ?? fail(`${arg} requires a value`)
+  } else if (arg === '--export-types') {
+    exportTypes = true
   } else if (arg === '--dates-datetime') {
     dates.datetime = true
   } else if (arg === '--dates-date') {
@@ -37,7 +40,10 @@ for (let i = 0; i < args.length; i++) {
 }
 if (input === undefined) fail(USAGE)
 
-const options: GenerateOptions | undefined = Object.keys(dates).length > 0 ? { dates } : undefined
+const options: GenerateOptions = {
+  ...(Object.keys(dates).length > 0 && { dates }),
+  ...(exportTypes && { exportTypes: true }),
+}
 const doc: unknown = JSON.parse(readFileSync(input, 'utf8'))
 const source = generateContract(doc, options)
 if (output === undefined) {

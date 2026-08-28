@@ -31,6 +31,9 @@ One file, importing only `zod` and `@zodapi/core`:
 - a `problemFlavor` const (`'zodapi' | 'problem-details' | undefined`, detected from the spec's
   error responses — zodapi's `urn:zodapi:validation` problem type, or an ASP.NET-style
   `ValidationProblemDetails`) to feed `decodersFor(problemFlavor)` when creating the client
+- with `exportTypes: true` (CLI `--export-types`), a `type <Name> = z.infer<typeof <Name>>` alias
+  alongside each component const (the zodios codegen convention). `z.infer` is the output side —
+  use `z.input<typeof <Name>>` where the wire form differs (e.g. date codecs)
 
 Query parameters typed `array` are declared with `queryArray(item)` from `@zodapi/core`, matching
 the zodapi `a[]=` convention.
