@@ -11,6 +11,8 @@ export type JsonSchema = Record<string, unknown>
 export interface ConvertContext {
   /** Resolve a `$ref` to a generated identifier; `forward` when the target is not yet declared. */
   resolveRef(ref: string): { ident: string; forward: boolean }
+  /** Resolve a `$ref` to its raw component schema, for structural checks; `undefined` when unknown. */
+  resolveComponentSchema(ref: string): JsonSchema | undefined
 }
 
 /** A zod expression plus whether it references an identifier declared later in the file. */
@@ -151,6 +153,80 @@ function unionExpr(members: unknown[], ctx: ConvertContext, indent: string): Exp
   }
 }
 
+/** The string values `properties[propertyName]` pins a member to, or `undefined` if unusable. */
+function discriminatorValues(component: JsonSchema, propertyName: string): string[] | undefined {
+  const properties = isSchemaObject(component['properties']) ? component['properties'] : undefined
+  const property = properties?.[propertyName]
+  if (!isSchemaObject(property)) return undefined
+  if (typeof property['const'] === 'string') return [property['const']]
+  const values = property['enum']
+  if (Array.isArray(values) && values.length > 0 && values.every((v) => typeof v === 'string')) {
+    return values
+  }
+  return undefined
+}
+
+/**
+ * `oneOf`/`anyOf` with a `discriminator` → `z.discriminatedUnion(...)`, or `undefined` to fall
+ * back to a plain union. zod validates lazily at parse time, so a member the guards cannot prove
+ * safe (non-`$ref`, forward reference, or no `const`/string-enum discriminator property) would
+ * make the generated contract throw in userland — fall back instead. A `{type: "null"}` member is
+ * excluded from the union and restored with `.nullable()`.
+ */
+function discriminatedUnionExpr(
+  schema: JsonSchema,
+  members: unknown[],
+  ctx: ConvertContext,
+): Expr | undefined {
+  const discriminator = schema['discriminator']
+  if (!isSchemaObject(discriminator)) return undefined
+  const propertyName = discriminator['propertyName']
+  if (typeof propertyName !== 'string') return undefined
+
+  const refs: string[] = []
+  let nullable = false
+  for (const member of members) {
+    if (!isSchemaObject(member)) return undefined
+    if (member['type'] === 'null') {
+      nullable = true
+      continue
+    }
+    if (typeof member['$ref'] !== 'string' || Object.keys(member).length !== 1) return undefined
+    refs.push(member['$ref'])
+  }
+  if (refs.length < 2) return undefined
+
+  const idents: string[] = []
+  const valuesByRef = new Map<string, string[]>()
+  for (const ref of refs) {
+    const component = ctx.resolveComponentSchema(ref)
+    if (component === undefined) return undefined
+    const values = discriminatorValues(component, propertyName)
+    if (values === undefined) return undefined
+    const { ident, forward } = ctx.resolveRef(ref)
+    if (forward) return undefined
+    idents.push(ident)
+    valuesByRef.set(ref, values)
+  }
+
+  // `mapping` is redundant (zod reads the values off each member) but when present it must agree
+  // with the members: every entry must target a member whose discriminator values include the key.
+  const mapping = discriminator['mapping']
+  if (mapping !== undefined) {
+    if (!isSchemaObject(mapping)) return undefined
+    for (const [value, target] of Object.entries(mapping)) {
+      if (typeof target !== 'string') return undefined
+      // Mapping values may be a full `$ref` or a bare component name.
+      const ref = refs.find((r) => r === target || r.endsWith(`/${target}`))
+      if (ref === undefined || !valuesByRef.get(ref)?.includes(value)) return undefined
+    }
+  }
+
+  let code = `z.discriminatedUnion(${json(propertyName)}, [${idents.join(', ')}])`
+  if (nullable) code += '.nullable()'
+  return { code, forward: false }
+}
+
 function baseExpr(schema: JsonSchema, ctx: ConvertContext, indent: string): Expr {
   const ref = schema['$ref']
   if (typeof ref === 'string') {
@@ -162,7 +238,9 @@ function baseExpr(schema: JsonSchema, ctx: ConvertContext, indent: string): Expr
   if (Array.isArray(schema['enum'])) return lit(enumExpr(schema['enum']))
 
   const anyOf = schema['anyOf'] ?? schema['oneOf']
-  if (Array.isArray(anyOf)) return unionExpr(anyOf, ctx, indent)
+  if (Array.isArray(anyOf)) {
+    return discriminatedUnionExpr(schema, anyOf, ctx) ?? unionExpr(anyOf, ctx, indent)
+  }
   if (Array.isArray(schema['allOf'])) {
     const members = schema['allOf'].map((m) => convertSchema(m, ctx, indent))
     const code = members

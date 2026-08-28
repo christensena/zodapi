@@ -134,6 +134,7 @@ class Generator {
   private readonly names = new NameAllocator()
   private readonly declared = new Set<string>()
   private usesQueryArray = false
+  private readonly schemas: JsonSchema
   private readonly ctx: ConvertContext = {
     resolveRef: (ref) => {
       if (!ref.startsWith(REF_PREFIX)) throw new Error(`unsupported $ref: ${ref}`)
@@ -142,9 +143,17 @@ class Generator {
       if (ident === undefined) throw new Error(`$ref to unknown component: ${ref}`)
       return { ident, forward: !this.declared.has(original) }
     },
+    resolveComponentSchema: (ref) => {
+      if (!ref.startsWith(REF_PREFIX)) return undefined
+      const target = this.schemas[ref.slice(REF_PREFIX.length)]
+      return isObject(target) ? target : undefined
+    },
   }
 
-  constructor(private readonly doc: JsonSchema) {}
+  constructor(private readonly doc: JsonSchema) {
+    const components = isObject(doc['components']) ? doc['components'] : {}
+    this.schemas = isObject(components['schemas']) ? components['schemas'] : {}
+  }
 
   generate(): string {
     const openapi = this.doc['openapi']
@@ -152,8 +161,7 @@ class Generator {
       throw new Error(`expected an OpenAPI 3.1 document, got openapi: ${json(openapi)}`)
     }
 
-    const components = isObject(this.doc['components']) ? this.doc['components'] : {}
-    const schemas = isObject(components['schemas']) ? components['schemas'] : {}
+    const schemas = this.schemas
     const order = orderComponents(schemas)
     // Allocate all component names first so refs resolve regardless of order.
     for (const name of Object.keys(schemas)) this.names.allocate(name)

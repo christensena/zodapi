@@ -5,8 +5,16 @@ import { describe, expect, it } from 'vitest'
 import { generateContract } from '../src/index.js'
 import { convertSchema, type ConvertContext } from '../src/schema-to-zod.js'
 
+// Components resolvable through the mock context, keyed by bare name.
+const components: Record<string, Record<string, unknown>> = {
+  Cat: { type: 'object', properties: { kind: { const: 'cat' } }, required: ['kind'] },
+  Dog: { type: 'object', properties: { kind: { enum: ['dog'] } }, required: ['kind'] },
+  Fish: { type: 'object', properties: { fins: { type: 'number' } } },
+}
+
 const ctx: ConvertContext = {
   resolveRef: (ref) => ({ ident: ref.split('/').at(-1) ?? '', forward: false }),
+  resolveComponentSchema: (ref) => components[ref.split('/').at(-1) ?? ''],
 }
 
 function code(schema: unknown): string {
@@ -23,6 +31,68 @@ describe('convertSchema', () => {
     expect(code({ oneOf: [{ type: 'string' }, { type: 'number' }] })).toBe(
       'z.union([z.string(), z.number()])',
     )
+  })
+
+  describe('discriminator', () => {
+    const cat = { $ref: '#/components/schemas/Cat' }
+    const dog = { $ref: '#/components/schemas/Dog' }
+
+    it('emits a discriminated union for oneOf with a discriminator', () => {
+      expect(code({ oneOf: [cat, dog], discriminator: { propertyName: 'kind' } })).toBe(
+        'z.discriminatedUnion("kind", [Cat, Dog])',
+      )
+    })
+
+    it('honors a discriminator next to anyOf', () => {
+      expect(code({ anyOf: [cat, dog], discriminator: { propertyName: 'kind' } })).toBe(
+        'z.discriminatedUnion("kind", [Cat, Dog])',
+      )
+    })
+
+    it('accepts a consistent mapping, with full refs or bare names', () => {
+      const mapping = { cat: '#/components/schemas/Cat', dog: 'Dog' }
+      expect(code({ oneOf: [cat, dog], discriminator: { propertyName: 'kind', mapping } })).toBe(
+        'z.discriminatedUnion("kind", [Cat, Dog])',
+      )
+    })
+
+    it('excludes a null member and appends .nullable()', () => {
+      expect(
+        code({ oneOf: [cat, dog, { type: 'null' }], discriminator: { propertyName: 'kind' } }),
+      ).toBe('z.discriminatedUnion("kind", [Cat, Dog]).nullable()')
+    })
+
+    it('falls back when a member lacks the discriminator property', () => {
+      const fish = { $ref: '#/components/schemas/Fish' }
+      expect(code({ oneOf: [cat, fish], discriminator: { propertyName: 'kind' } })).toBe(
+        'z.union([Cat, Fish])',
+      )
+    })
+
+    it('falls back when a member is not a plain $ref', () => {
+      const inline = { type: 'object', properties: { kind: { const: 'inline' } } }
+      expect(code({ oneOf: [cat, inline], discriminator: { propertyName: 'kind' } })).toBe(
+        `z.union([Cat, ${code(inline)}])`,
+      )
+    })
+
+    it('falls back when a member is a forward reference', () => {
+      const forwardCtx: ConvertContext = {
+        ...ctx,
+        resolveRef: (ref) => ({ ident: ref.split('/').at(-1) ?? '', forward: true }),
+      }
+      expect(
+        convertSchema({ oneOf: [cat, dog], discriminator: { propertyName: 'kind' } }, forwardCtx)
+          .code,
+      ).toBe('z.union([Cat, Dog])')
+    })
+
+    it('falls back when the mapping disagrees with the members', () => {
+      const mapping = { cat: '#/components/schemas/Dog' }
+      expect(code({ oneOf: [cat, dog], discriminator: { propertyName: 'kind', mapping } })).toBe(
+        'z.union([Cat, Dog])',
+      )
+    })
   })
 
   it('collapses a null branch into .nullable()', () => {

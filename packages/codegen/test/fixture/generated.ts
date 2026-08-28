@@ -63,6 +63,18 @@ export const Gadget = z.object({
 
 export const Product = z.union([Widget, Gadget]).meta({ id: "Product" })
 
+export const UserCreated = z.object({
+  type: z.enum(["user.created"]),
+  user: User,
+}).meta({ id: "UserCreated" })
+
+export const UserDeleted = z.object({
+  type: z.enum(["user.deleted"]),
+  userId: z.uuid(),
+}).meta({ id: "UserDeleted" })
+
+export const Event = z.discriminatedUnion("type", [UserCreated, UserDeleted]).meta({ id: "Event" })
+
 export const Timestamps = z.object({
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
@@ -277,6 +289,29 @@ export const getProducts = {
   },
 } as const satisfies GeneratedRoute
 
+export const getEvents = {
+  method: "get",
+  path: "/events",
+  responses: {
+    200: {
+      description: "ok",
+      content: {
+        "application/json": {
+          schema: z.array(Event),
+        },
+      },
+    },
+    400: {
+      description: "Request validation failed",
+      content: {
+        "application/problem+json": {
+          schema: ValidationError,
+        },
+      },
+    },
+  },
+} as const satisfies GeneratedRoute
+
 export const getReportsYearExport = {
   method: "get",
   path: "/reports/{year}/export",
@@ -344,6 +379,7 @@ export const routes = [
   postUsers,
   getCategories,
   getProducts,
+  getEvents,
   getReportsYearExport,
   getNotes,
 ] as const

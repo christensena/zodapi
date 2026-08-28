@@ -36,6 +36,14 @@ export const Gadget = z
   .meta({ id: 'Gadget' })
 export const Product = z.union([Widget, Gadget]).meta({ id: 'Product' })
 
+export const UserCreated = z
+  .object({ type: z.literal('user.created'), user: User })
+  .meta({ id: 'UserCreated' })
+export const UserDeleted = z
+  .object({ type: z.literal('user.deleted'), userId: z.uuid() })
+  .meta({ id: 'UserDeleted' })
+export const Event = z.discriminatedUnion('type', [UserCreated, UserDeleted]).meta({ id: 'Event' })
+
 export const Labels = z.record(z.string(), z.string()).meta({ id: 'Labels' })
 
 export const NotFound = z
@@ -164,6 +172,15 @@ export const listProducts = route({
   },
 })
 
+export const listEvents = route({
+  alias: 'listEvents',
+  method: 'get',
+  path: '/events',
+  responses: {
+    200: { description: 'ok', content: { 'application/json': { schema: z.array(Event) } } },
+  },
+})
+
 export const exportReport = route({
   method: 'get',
   path: '/reports/{year}/export',
@@ -207,6 +224,7 @@ export const routes = [
   deleteUser,
   getCategories,
   listProducts,
+  listEvents,
   exportReport,
   getNotes,
 ] as const

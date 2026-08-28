@@ -134,6 +134,40 @@ describe('createApp()', () => {
     ).toEqual({ $ref: '#/components/schemas/ValidationError' })
   })
 
+  it('documents a discriminated union as oneOf with a discriminator object', async () => {
+    const Circle = z.object({ shape: z.literal('circle'), radius: z.number() }).meta({
+      id: 'Circle',
+    })
+    const Square = z.object({ shape: z.literal('square'), side: z.number() }).meta({
+      id: 'Square',
+    })
+    const Shape = z.discriminatedUnion('shape', [Circle, Square]).meta({ id: 'Shape' })
+    const app = createApp()
+      .openapi(
+        route({
+          method: 'get',
+          path: '/shape',
+          responses: {
+            200: { description: 'ok', content: { 'application/json': { schema: Shape } } },
+          },
+        }),
+        (c) => c.json({ shape: 'circle' as const, radius: 1 }, 200),
+      )
+      .doc31('/openapi.json', { openapi: '3.1.0', info: { title: 't', version: '1' } })
+
+    const doc = await (await app.request('/openapi.json')).json()
+    expect(doc.components.schemas.Shape).toEqual({
+      oneOf: [{ $ref: '#/components/schemas/Circle' }, { $ref: '#/components/schemas/Square' }],
+      discriminator: {
+        propertyName: 'shape',
+        mapping: {
+          circle: '#/components/schemas/Circle',
+          square: '#/components/schemas/Square',
+        },
+      },
+    })
+  })
+
   it('lets a user-supplied defaultHook win', async () => {
     const app = createApp({
       defaultHook: (result, c) => {
