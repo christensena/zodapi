@@ -1,5 +1,11 @@
 # @zodapi/core
 
+## 0.2.1
+
+### Patch Changes
+
+- 645feb2: Add `repository` metadata so npm links each package back to its source directory
+
 ## 0.2.0
 
 ### Minor Changes
