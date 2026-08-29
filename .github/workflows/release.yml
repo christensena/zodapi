@@ -7,6 +7,8 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  # npm trusted publishing: the job proves its identity to npm via OIDC.
+  id-token: write
 
 concurrency:
   group: release-${{ github.ref }}
@@ -25,11 +27,13 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # Opens (or updates) a "Version packages" PR from the pending changesets.
-      # Publishing stays local: `pnpm changeset:publish` prompts for the npm OTP.
+      # Opens (or updates) a "Version packages" PR from the pending changesets,
+      # then publishes once that PR lands. No npm token: pnpm exchanges the
+      # Actions OIDC token per package, and adds provenance automatically.
       - uses: changesets/action@v2
         with:
           version-script: pnpm changeset:version
+          publish-script: pnpm changeset:publish
           pr-title: 'chore: version packages'
           commit-message: 'chore: version packages'
           github-token: ${{ secrets.GITHUB_TOKEN }}
