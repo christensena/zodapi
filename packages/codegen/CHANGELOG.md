@@ -1,5 +1,11 @@
 # @zodapi/codegen
 
+## 0.3.1
+
+### Patch Changes
+
+- 645feb2: Add `repository` metadata so npm links each package back to its source directory
+
 ## 0.3.0
 
 ### Minor Changes

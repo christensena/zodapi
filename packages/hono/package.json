@@ -1,6 +1,6 @@
 {
   "name": "@zodapi/hono",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Thin preset over @hono/zod-openapi: fixed 400 validation error shape and route helper",
   "license": "MIT",
   "repository": {
