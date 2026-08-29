@@ -5,7 +5,7 @@ import {
   type ErrorVariant,
   type RouteByAlias,
   type RouteDef,
-  jsonSchemaOfResponse,
+  jsonSchemasOfResponse,
   responseDefForStatus,
 } from './route.js'
 import {
@@ -120,8 +120,8 @@ function matchesRoute(route: RouteDef, err: ApiError): boolean {
 function dataMatchesDeclaredResponse(route: RouteDef, status: number, data: unknown): boolean {
   const match = responseDefForStatus(route, status)
   if (!match) return false
-  const schema = jsonSchemaOfResponse(match.def)
-  return schema ? schema.safeParse(data).success : true
+  const schemas = jsonSchemasOfResponse(match.def)
+  return schemas.length === 0 || schemas.some((schema) => schema.safeParse(data).success)
 }
 
 /**

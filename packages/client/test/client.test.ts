@@ -18,7 +18,15 @@ import type { AdapterRequest } from '@zodapi/client'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 
-import { codecRoutes, createThing, getThing, makeApp, renameThing, routes } from './contract.js'
+import {
+  BadInput,
+  codecRoutes,
+  createThing,
+  getThing,
+  makeApp,
+  renameThing,
+  routes,
+} from './contract.js'
 
 function makeClient(counters = { createCalls: 0 }) {
   const app = makeApp(counters)
@@ -110,7 +118,9 @@ describe('the fixed 400 validation error shape', () => {
     expect(err).not.toBeInstanceOf(ValidationApiError)
     expect(matchErrorByStatus(renameThing, err, 400)).toBe(true)
     if (matchErrorByStatus(renameThing, err, 400)) {
-      expect(err.data.error.code).toBe('BAD_INPUT')
+      // data is the union of both merged 400 bodies; isValidationError discriminates.
+      expect(isValidationError(err)).toBe(false)
+      expect(BadInput.parse(err.data).error.code).toBe('BAD_INPUT')
     }
   })
 
@@ -123,6 +133,8 @@ describe('the fixed 400 validation error shape', () => {
     if (err instanceof ValidationApiError) {
       expect(err.target).toBe('json')
     }
+    // The merged problem+json content makes the validation body a declared 400 too.
+    expect(matchErrorByStatus(renameThing, err, 400)).toBe(true)
   })
 })
 

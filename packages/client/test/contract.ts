@@ -57,7 +57,8 @@ export const BadInput = z.object({
   error: z.object({ code: z.literal('BAD_INPUT'), message: z.string() }),
 })
 
-// Declares its own plain application/json 400, so route() merges no ValidationError.
+// Declares its own plain application/json 400; route() merges the problem+json
+// ValidationError content into it.
 export const renameThing = route({
   alias: 'renameThing',
   method: 'post',

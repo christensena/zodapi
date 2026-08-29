@@ -10,7 +10,15 @@ import type { SuccessData, ErrorVariant } from '@zodapi/core'
 import type { ValidationError } from '@zodapi/core'
 import { describe, expectTypeOf, it } from 'vitest'
 
-import { codecRoutes, createThing, getEvent, getThing, routes, teapot } from './contract.js'
+import {
+  codecRoutes,
+  createThing,
+  getEvent,
+  getThing,
+  renameThing,
+  routes,
+  teapot,
+} from './contract.js'
 
 const client = createClient(routes, { baseUrl: 'http://test.local' })
 
@@ -56,6 +64,13 @@ describe('SuccessData / ErrorVariant', () => {
       error: { code: 'NOT_FOUND'; message: string }
     }>()
     expectTypeOf<Extract<V, { status: 400 }>['data']>().toEqualTypeOf<ValidationError>()
+  })
+
+  it('a merged own-400 is the union of the custom body and ValidationError', () => {
+    type V = ErrorVariant<typeof renameThing>
+    expectTypeOf<Extract<V, { status: 400 }>['data']>().toEqualTypeOf<
+      { error: { code: 'BAD_INPUT'; message: string } } | ValidationError
+    >()
   })
 })
 

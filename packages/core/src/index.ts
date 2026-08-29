@@ -14,6 +14,7 @@ export {
   type SuccessData,
   type SuccessStatuses,
   jsonSchemaOfResponse,
+  jsonSchemasOfResponse,
   responseDefForStatus,
 } from './route.js'
 export {
