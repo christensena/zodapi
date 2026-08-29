@@ -3,6 +3,11 @@
   "version": "0.2.0",
   "description": "Typed fetch/axios client over zodapi route contracts with optional zod validation",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/christensena/zodapi.git",
+    "directory": "packages/client"
+  },
   "files": [
     "dist"
   ],

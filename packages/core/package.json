@@ -3,6 +3,11 @@
   "version": "0.2.0",
   "description": "Shared contract types, fixed validation-error shape, and typed error guards for zodapi",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/christensena/zodapi.git",
+    "directory": "packages/core"
+  },
   "files": [
     "dist"
   ],

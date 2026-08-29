@@ -3,6 +3,11 @@
   "version": "0.3.0",
   "description": "Generate a zodapi contract (zod schemas + route defs) from an OpenAPI 3.1 document",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/christensena/zodapi.git",
+    "directory": "packages/codegen"
+  },
   "bin": {
     "zodapi-codegen": "./dist/cli.js"
   },
