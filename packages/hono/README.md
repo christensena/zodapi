@@ -34,6 +34,14 @@ export const getUser = route({
 The result is a plain route object: pass it to `app.openapi(...)` on the server and into
 `createClient([...])` from `@zodapi/client`.
 
+A route that declares its own `400` keeps it verbatim — nothing is merged. Client-side, error
+decoding is keyed on the `application/problem+json` media type, so a custom `application/json` 400
+body is not decoded — it throws a plain `ApiError`, narrowed with the guards like any other
+declared status. Note that `createApp()`'s validation hook still answers request-validation
+failures on such a route with the zodapi problem-details 400 (which the client decodes into
+`ValidationApiError` regardless of what the route declares), so the route can respond 400 with two
+shapes while the OpenAPI doc only shows the custom one.
+
 ## createApp()
 
 An `OpenAPIHono` whose validation failures respond `400` with the fixed `ValidationError`

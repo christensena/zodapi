@@ -132,7 +132,9 @@ OpenAPI 3.0 documents (3.1 only).
 - **Errors throw.** Non-2xx responses run through the error decoders first (server validation
   failures throw `ValidationApiError`, other recognised problem+json responses `ProblemApiError`);
   otherwise declared statuses throw `ApiError` (narrow with the guards) and undeclared statuses
-  `UnexpectedResponseApiError`. Client-side validation failures throw `RequestValidationError` /
+  `UnexpectedResponseApiError`. Decoding is keyed on the `application/problem+json` media type, so
+  a `400` an API returns itself with plain `application/json` is not decoded — it throws a plain
+  `ApiError` like any other declared status. Client-side validation failures throw `RequestValidationError` /
   `ResponseValidationError`.
 - **Validation default** is `'response'` (2xx bodies parsed with the contract schema; error bodies
   are checked by the guards instead).
