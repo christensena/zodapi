@@ -71,6 +71,45 @@ type ParamsCheck<R extends ZodapiRouteConfig> = [
       >
     }
 
+// Params and query values reach the server as raw strings (repeated query
+// keys as arrays of strings), so a value schema whose input type admits
+// neither fails validation on every request — bare z.number()/z.boolean()
+// type-check but 400 at runtime. Coercion must show in the input type, since
+// z.coerce.number<number>() is structurally identical to z.number(): use
+// z.coerce.number<number | string>() or z.stringbool(). Unknowable inputs
+// (plain z.coerce.number(), z.any()), non-object schemas, and shapes with
+// non-literal keys pass unchecked.
+type NonWireKeys<S> = S extends z.ZodType
+  ? z.input<S> extends Record<string, unknown>
+    ? string extends keyof z.input<S>
+      ? never
+      : {
+          [K in keyof z.input<S>]-?: unknown extends z.input<S>[K]
+            ? never
+            : [Extract<z.input<S>[K], string | readonly string[]>] extends [never]
+              ? K
+              : never
+        }[keyof z.input<S>]
+    : never
+  : never
+
+/** `unknown` when every params/query value schema can accept a wire string; an error-shaped type otherwise. */
+type WireCheck<R extends ZodapiRouteConfig> = [
+  NonWireKeys<R['request'] extends { params: infer S } ? S : never>,
+] extends [never]
+  ? [NonWireKeys<R['request'] extends { query: infer S } ? S : never>] extends [never]
+    ? unknown
+    : {
+        'query values that can never match a wire string (use z.coerce.number<number | string> or z.stringbool)': NonWireKeys<
+          R['request'] extends { query: infer S } ? S : never
+        >
+      }
+  : {
+      'params values that can never match a wire string (use z.coerce.number<number | string> or z.stringbool)': NonWireKeys<
+        R['request'] extends { params: infer S } ? S : never
+      >
+    }
+
 export type ZodapiRoute<R extends ZodapiRouteConfig> = Omit<R, 'responses'> & {
   responses: With400<R['responses']>
 } & { getRoutingPath(): ConvertPathType<R['path']> }
@@ -124,12 +163,20 @@ function assertParamsMatchPath(config: ZodapiRouteConfig): void {
  *   `Content-Type` fails validation instead of silently skipping it
  * - checks `{...}` path params against the params schema keys — both as a
  *   compile-time error and a definition-time throw on mismatch
+ * - rejects at compile time params/query value schemas that can never match
+ *   the wire's raw strings — bare `z.number()`/`z.boolean()` type-check but
+ *   400 on every request; declare the wire form in the input type instead:
+ *   `z.coerce.number<number | string>()`, `z.stringbool()` (not
+ *   `z.coerce.boolean()`, which coerces any non-empty string — `"false"`
+ *   included — to `true`)
  * - carries an optional `alias` for zodios-style client method names
  *
  * The result is a plain route object: pass it to `app.openapi(...)` on the
  * server and into `createClient([...])` on the client.
  */
-export function route<const R extends ZodapiRouteConfig>(config: R & ParamsCheck<R>): ZodapiRoute<R>
+export function route<const R extends ZodapiRouteConfig>(
+  config: R & ParamsCheck<R> & WireCheck<R>,
+): ZodapiRoute<R>
 export function route(config: ZodapiRouteConfig): unknown {
   assertParamsMatchPath(config)
   const { alias, ...rest } = config

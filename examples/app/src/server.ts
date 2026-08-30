@@ -26,9 +26,14 @@ export const openApiDoc = {
 
 export const app = createApp()
   .openapi(api.listUsers, (c) => {
-    const { q, limit, tags } = c.req.valid('query')
+    const { q, exact, limit, tags } = c.req.valid('query')
     let items = [...users.values()]
-    if (q) items = items.filter((u) => u.name.toLowerCase().includes(q.toLowerCase()))
+    if (q) {
+      const needle = q.toLowerCase()
+      items = items.filter((u) =>
+        exact ? u.name.toLowerCase() === needle : u.name.toLowerCase().includes(needle),
+      )
+    }
     if (tags) items = items.filter((u) => tags.some((tag) => u.tags.includes(tag)))
     return c.json({ items: items.slice(0, limit), total: items.length }, 200)
   })

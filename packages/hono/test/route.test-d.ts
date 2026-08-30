@@ -73,3 +73,87 @@ describe('route() params/path type check', () => {
     )
   })
 })
+
+describe('route() wire string type check', () => {
+  it('accepts string-compatible params and query value schemas', () => {
+    route({
+      method: 'get',
+      path: '/things/{id}',
+      request: {
+        params: z.object({ id: z.coerce.number<number | string>().int() }),
+        query: z.object({
+          q: z.string().optional(),
+          role: z.enum(['admin', 'member']).optional(),
+          limit: z.coerce.number<number | string>().int().default(20),
+          exact: z.stringbool().optional(),
+          loose: z.coerce.number(), // input `unknown` — passes unchecked
+          when: z.iso.datetime().optional(),
+        }),
+      },
+      responses: ok,
+    })
+  })
+
+  it('rejects bare z.number()/z.boolean() in a query schema', () => {
+    route(
+      // @ts-expect-error `n` and `b` can never match a wire string
+      {
+        method: 'get',
+        path: '/things',
+        request: { query: z.object({ n: z.number(), b: z.boolean() }) },
+        responses: ok,
+      },
+    )
+  })
+
+  it('rejects a bare z.number() path param', () => {
+    route(
+      // @ts-expect-error `id` can never match a wire string
+      {
+        method: 'get',
+        path: '/things/{id}',
+        request: { params: z.object({ id: z.number() }) },
+        responses: ok,
+      },
+    )
+  })
+
+  it('rejects an optional/defaulted bare number, which is still never a string', () => {
+    route(
+      // @ts-expect-error `limit` can never match a wire string
+      {
+        method: 'get',
+        path: '/things',
+        request: { query: z.object({ limit: z.number().optional() }) },
+        responses: ok,
+      },
+    )
+  })
+
+  it('accepts string arrays but rejects number arrays for repeated query keys', () => {
+    route({
+      method: 'get',
+      path: '/things',
+      request: { query: z.object({ tags: z.array(z.string()).optional() }) },
+      responses: ok,
+    })
+    route(
+      // @ts-expect-error `ids` items can never match wire strings
+      {
+        method: 'get',
+        path: '/things',
+        request: { query: z.object({ ids: z.array(z.number()) }) },
+        responses: ok,
+      },
+    )
+  })
+
+  it('skips the check for schemas with non-literal keys', () => {
+    route({
+      method: 'get',
+      path: '/things',
+      request: { query: z.looseObject({ n: z.number() }) },
+      responses: ok,
+    })
+  })
+})

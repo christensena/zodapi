@@ -39,7 +39,10 @@ export const listUsers = route({
   request: {
     query: z.object({
       q: z.string().optional(),
-      limit: z.coerce.number<number>().int().min(1).max(100).default(20),
+      // Query values are strings on the wire: the input type must say so
+      // (z.stringbool, not z.coerce.boolean — "false" would coerce to true).
+      exact: z.stringbool().optional(),
+      limit: z.coerce.number<number | string>().int().min(1).max(100).default(20),
       tags: queryArray(z.string()).optional(),
     }),
   },

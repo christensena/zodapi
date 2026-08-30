@@ -162,7 +162,9 @@ describe('query typing', () => {
   it('queryArray keeps array input typing', () => {
     expectTypeOf(client.listThings).parameter(0).toExtend<
       | {
-          query?: { limit?: number | undefined; tags?: string | string[] | undefined } | undefined
+          query?:
+            | { limit?: number | string | undefined; tags?: string | string[] | undefined }
+            | undefined
         }
       | undefined
     >()

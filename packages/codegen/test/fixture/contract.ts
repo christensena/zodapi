@@ -85,7 +85,7 @@ export const listUsers = route({
   path: '/users',
   request: {
     query: z.object({
-      limit: z.coerce.number<number>().int().min(1).max(100).default(20),
+      limit: z.coerce.number<number | string>().int().min(1).max(100).default(20),
       role: Role.optional(),
       tags: queryArray(z.string()).optional(),
       search: z.string().meta({ description: 'Free-text filter' }).optional(),
@@ -188,7 +188,7 @@ export const exportReport = route({
   method: 'get',
   path: '/reports/{year}/export',
   request: {
-    params: z.object({ year: z.coerce.number<number>().int() }),
+    params: z.object({ year: z.coerce.number<number | string>().int() }),
   },
   responses: {
     200: {

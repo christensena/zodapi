@@ -200,6 +200,23 @@ describe('createApp()', () => {
     })
   })
 
+  it('parses the wire-string idioms: coerced number and stringbool', async () => {
+    const app = createApp().openapi(
+      route({
+        method: 'get',
+        path: '/w',
+        request: {
+          query: z.object({ n: z.coerce.number<number | string>(), b: z.stringbool() }),
+        },
+        responses: { 200: { description: 'ok' } },
+      }),
+      (c) => c.json(c.req.valid('query'), 200),
+    )
+    const res = await app.request('/w?n=5&b=false')
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ n: 5, b: false })
+  })
+
   it('lets a user-supplied defaultHook win', async () => {
     const app = createApp({
       defaultHook: (result, c) => {
@@ -209,7 +226,7 @@ describe('createApp()', () => {
       route({
         method: 'get',
         path: '/x',
-        request: { query: z.object({ n: z.coerce.number<number>() }) },
+        request: { query: z.object({ n: z.coerce.number<number | string>() }) },
         responses: { 200: { description: 'ok' } },
       }),
       (c) => c.json({}, 200),
