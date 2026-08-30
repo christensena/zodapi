@@ -206,7 +206,7 @@ describe('createApp()', () => {
         method: 'get',
         path: '/w',
         request: {
-          query: z.object({ n: z.coerce.number<number | `${number}`>(), b: z.stringbool() }),
+          query: z.object({ n: z.coerce.number(), b: z.stringbool() }),
         },
         responses: { 200: { description: 'ok' } },
       }),
@@ -226,7 +226,7 @@ describe('createApp()', () => {
       route({
         method: 'get',
         path: '/x',
-        request: { query: z.object({ n: z.coerce.number<number | `${number}`>() }) },
+        request: { query: z.object({ n: z.coerce.number() }) },
         responses: { 200: { description: 'ok' } },
       }),
       (c) => c.json({}, 200),

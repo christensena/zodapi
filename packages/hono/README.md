@@ -50,23 +50,21 @@ kept fully verbatim.
 ### Params and query are strings on the wire
 
 Path and query values reach the server as raw strings (repeated query keys as arrays of strings),
-so a bare `z.number()` or `z.boolean()` type-checks but fails validation on every request with a 400. `route()` rejects such schemas at compile time; declare the wire form in the input type
-instead:
+so a bare `z.number()` or `z.boolean()` type-checks but fails validation on every request with a 400. `route()` rejects such schemas at compile time; use coercing schemas instead:
 
 ```ts
 query: z.object({
-  limit: z.coerce.number<number | `${number}`>().int().max(100).default(20),
+  limit: z.coerce.number().int().max(100).default(20),
   exact: z.stringbool().optional(),
   tags: queryArray(z.string()).optional(),
 })
 ```
 
-- ``z.coerce.number<number | `${number}`>()`` coerces the wire string; the template-literal input
-  type declares that (only) numeric strings are welcome. The type argument matters: plain
-  `z.coerce.number()` types its input as `unknown`, and `z.coerce.number<number>()` is
-  indistinguishable from `z.number()` at the type level, so neither tells the compile-time check
-  which strings the wire may carry. `@zodapi/client` callers are unaffected either way — query
-  and params args are always typed with the decoded output, a plain `number`.
+- `z.coerce.number()` coerces the wire string. Leave the type argument off:
+  `z.coerce.number<number>()` narrows the declared input to `number`, making it indistinguishable
+  from `z.number()` at the type level, so the compile-time check rejects it. `@zodapi/client`
+  callers pass a plain `number` either way — query and params args are typed with the decoded
+  output.
 - `z.stringbool()` parses `"true"`/`"false"` (and friends) into a boolean. Avoid
   `z.coerce.boolean()`: it applies JS truthiness, so any non-empty string — `"false"` included —
   coerces to `true`.

@@ -80,18 +80,29 @@ describe('route() wire string type check', () => {
       method: 'get',
       path: '/things/{id}',
       request: {
-        params: z.object({ id: z.coerce.number<number | `${number}`>().int() }),
+        params: z.object({ id: z.coerce.number().int() }),
         query: z.object({
           q: z.string().optional(),
           role: z.enum(['admin', 'member']).optional(),
-          limit: z.coerce.number<number | `${number}`>().int().default(20),
+          limit: z.coerce.number().int().default(20), // input `unknown` — passes unchecked
           exact: z.stringbool().optional(),
-          loose: z.coerce.number(), // input `unknown` — passes unchecked
           when: z.iso.datetime().optional(),
         }),
       },
       responses: ok,
     })
+  })
+
+  it('rejects z.coerce.number<number>(), indistinguishable from z.number()', () => {
+    route(
+      // @ts-expect-error the narrowed input type erases the coercion evidence
+      {
+        method: 'get',
+        path: '/things',
+        request: { query: z.object({ n: z.coerce.number<number>() }) },
+        responses: ok,
+      },
+    )
   })
 
   it('rejects bare z.number()/z.boolean() in a query schema', () => {

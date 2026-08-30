@@ -74,11 +74,11 @@ type ParamsCheck<R extends ZodapiRouteConfig> = [
 // Params and query values reach the server as raw strings (repeated query
 // keys as arrays of strings), so a value schema whose input type admits
 // neither fails validation on every request — bare z.number()/z.boolean()
-// type-check but 400 at runtime. Coercion must show in the input type, since
-// z.coerce.number<number>() is structurally identical to z.number(): use
-// z.coerce.number<number | `${number}`>() or z.stringbool(). Unknowable inputs
-// (plain z.coerce.number(), z.any()), non-object schemas, and shapes with
-// non-literal keys pass unchecked.
+// type-check but 400 at runtime. Use z.coerce.number() (input `unknown`) or
+// z.stringbool() instead; z.coerce.number<number>() narrows its input and is
+// structurally identical to z.number(), so it is rejected too. Unknowable
+// inputs (plain z.coerce.number(), z.any()), non-object schemas, and shapes
+// with non-literal keys pass unchecked.
 type NonWireKeys<S> = S extends z.ZodType
   ? z.input<S> extends Record<string, unknown>
     ? string extends keyof z.input<S>
@@ -100,12 +100,12 @@ type WireCheck<R extends ZodapiRouteConfig> = [
   ? [NonWireKeys<R['request'] extends { query: infer S } ? S : never>] extends [never]
     ? unknown
     : {
-        'query values that can never match a wire string (use z.coerce.number<number | `${number}`> or z.stringbool)': NonWireKeys<
+        'query values that can never match a wire string (use z.coerce.number() or z.stringbool())': NonWireKeys<
           R['request'] extends { query: infer S } ? S : never
         >
       }
   : {
-      'params values that can never match a wire string (use z.coerce.number<number | `${number}`> or z.stringbool)': NonWireKeys<
+      'params values that can never match a wire string (use z.coerce.number() or z.stringbool())': NonWireKeys<
         R['request'] extends { params: infer S } ? S : never
       >
     }
@@ -165,10 +165,10 @@ function assertParamsMatchPath(config: ZodapiRouteConfig): void {
  *   compile-time error and a definition-time throw on mismatch
  * - rejects at compile time params/query value schemas that can never match
  *   the wire's raw strings — bare `z.number()`/`z.boolean()` type-check but
- *   400 on every request; declare the wire form in the input type instead:
- *   ``z.coerce.number<number | `${number}`>()``, `z.stringbool()` (not
+ *   400 on every request; use `z.coerce.number()` or `z.stringbool()` (not
  *   `z.coerce.boolean()`, which coerces any non-empty string — `"false"`
- *   included — to `true`)
+ *   included — to `true`; not `z.coerce.number<number>()`, whose narrowed
+ *   input is indistinguishable from `z.number()`)
  * - carries an optional `alias` for zodios-style client method names
  *
  * The result is a plain route object: pass it to `app.openapi(...)` on the

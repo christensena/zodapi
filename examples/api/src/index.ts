@@ -39,10 +39,10 @@ export const listUsers = route({
   request: {
     query: z.object({
       q: z.string().optional(),
-      // Query values are strings on the wire: the input type must say so
+      // Query values are strings on the wire: use coercing schemas
       // (z.stringbool, not z.coerce.boolean — "false" would coerce to true).
       exact: z.stringbool().optional(),
-      limit: z.coerce.number<number | `${number}`>().int().min(1).max(100).default(20),
+      limit: z.coerce.number().int().min(1).max(100).default(20),
       tags: queryArray(z.string()).optional(),
     }),
   },
@@ -63,7 +63,7 @@ export const getUser = route({
   method: 'get',
   path: '/users/{id}',
   request: {
-    params: z.object({ id: z.coerce.number<number | `${number}`>().int().min(1) }),
+    params: z.object({ id: z.coerce.number().int().min(1) }),
   },
   responses: {
     200: {
@@ -101,7 +101,7 @@ export const deleteUser = route({
   method: 'delete',
   path: '/users/{id}',
   request: {
-    params: z.object({ id: z.coerce.number<number | `${number}`>().int().min(1) }),
+    params: z.object({ id: z.coerce.number().int().min(1) }),
   },
   responses: {
     204: { description: 'Deleted' },
