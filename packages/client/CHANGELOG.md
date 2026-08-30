@@ -1,5 +1,12 @@
 # @zodapi/client
 
+## 0.2.2
+
+### Patch Changes
+
+- Updated dependencies [f1d047e]
+  - @zodapi/core@0.3.0
+
 ## 0.2.1
 
 ### Patch Changes

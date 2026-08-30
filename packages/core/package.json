@@ -1,6 +1,6 @@
 {
   "name": "@zodapi/core",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Shared contract types, fixed validation-error shape, and typed error guards for zodapi",
   "license": "MIT",
   "repository": {
