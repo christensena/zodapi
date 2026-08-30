@@ -62,12 +62,11 @@ query: z.object({
 ```
 
 - ``z.coerce.number<number | `${number}`>()`` coerces the wire string; the template-literal input
-  type admits only numeric strings, so a `@zodapi/client` in wire-form mode with
-  `encodeRequests: false` accepts `42` or `'42'` but not `'abc'` (in the default encode mode args
-  are typed `z.output` — a plain `number`). The type argument matters: plain `z.coerce.number()` types its
-  input as `unknown`, and `z.coerce.number<number>()` is indistinguishable from `z.number()` at
-  the type level, so neither tells the compile-time check (or the client's argument types) which
-  strings are welcome.
+  type declares that (only) numeric strings are welcome. The type argument matters: plain
+  `z.coerce.number()` types its input as `unknown`, and `z.coerce.number<number>()` is
+  indistinguishable from `z.number()` at the type level, so neither tells the compile-time check
+  which strings the wire may carry. `@zodapi/client` callers are unaffected either way — query
+  and params args are always typed with the decoded output, a plain `number`.
 - `z.stringbool()` parses `"true"`/`"false"` (and friends) into a boolean. Avoid
   `z.coerce.boolean()`: it applies JS truthiness, so any non-empty string — `"false"` included —
   coerces to `true`.

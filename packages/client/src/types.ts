@@ -50,9 +50,11 @@ export interface ErrorContext {
 export type OnError = (context: ErrorContext) => 'retry' | void | Promise<'retry' | void>
 
 /**
- * Which side of the request schemas the caller supplies: 'output' (decoded
- * form, the default — e.g. `Date` objects where a contract uses date codecs)
- * or 'input' (wire form, when `encodeRequests` is off).
+ * Which side of the request body schema the caller supplies: 'input' (wire
+ * form, the default) or 'output' (decoded form, when `encodeRequests` is on —
+ * e.g. `Date` objects where a contract uses date codecs). Params, query, and
+ * header values are unaffected: the transport turns them into strings anyway,
+ * so they are always supplied in decoded form.
  */
 export type RequestIO = 'input' | 'output'
 
@@ -64,10 +66,9 @@ type OptionalInputKeys<S extends z.ZodType> = {
   [K in keyof z.input<S>]-?: undefined extends z.input<S>[K] ? K : never
 }[keyof z.input<S>]
 
-// Output-mode arg values: typed z.output, but keys the input side lets the
-// caller omit (`.default()`, `.optional()`) stay omittable — nothing is
-// encoded for codec-less schemas, so an omitted defaulted key is simply not
-// sent and the server applies the default.
+// Decoded arg values: typed z.output, but keys the input side lets the caller
+// omit (`.default()`, `.optional()`) stay omittable — an omitted defaulted
+// key is simply not sent and the server applies the default.
 type OutputVal<S extends z.ZodType> =
   z.input<S> extends Record<string, unknown>
     ? z.output<S> extends Record<string, unknown>
@@ -83,34 +84,33 @@ type SchemaVal<S extends z.ZodType, M extends RequestIO> = M extends 'output'
   ? OutputVal<S>
   : z.input<S>
 
-type ParamsArg<R extends RouteDef, M extends RequestIO> = R['request'] extends {
-  params: infer S extends z.ZodType
-}
-  ? { params: SchemaVal<S, M> }
+// Params, query, and headers are strings on the wire regardless of the IO
+// mode, so their args are always decoded values; codec-bearing values are
+// encoded by the client before serialization.
+type ParamsArg<R extends RouteDef> = R['request'] extends { params: infer S extends z.ZodType }
+  ? { params: OutputVal<S> }
   : {}
 
-type QueryArg<R extends RouteDef, M extends RequestIO> = R['request'] extends {
-  query: infer S extends z.ZodType
-}
-  ? {} extends SchemaVal<S, M>
-    ? { query?: SchemaVal<S, M> }
-    : { query: SchemaVal<S, M> }
+type QueryArg<R extends RouteDef> = R['request'] extends { query: infer S extends z.ZodType }
+  ? {} extends OutputVal<S>
+    ? { query?: OutputVal<S> }
+    : { query: OutputVal<S> }
   : {}
 
 type BodyArg<R extends RouteDef, M extends RequestIO> = [JsonBodySchema<R>] extends [never]
   ? {}
   : { body: SchemaVal<JsonBodySchema<R>, M> }
 
-type HeadersArg<R extends RouteDef, M extends RequestIO> = R['request'] extends {
+type HeadersArg<R extends RouteDef> = R['request'] extends {
   headers: infer S extends z.ZodType
 }
-  ? { headers: SchemaVal<S, M> & Record<string, string | undefined> }
+  ? { headers: OutputVal<S> & Record<string, string | undefined> }
   : { headers?: Record<string, string | undefined> }
 
-type BaseArgs<R extends RouteDef, M extends RequestIO> = ParamsArg<R, M> &
-  QueryArg<R, M> &
+type BaseArgs<R extends RouteDef, M extends RequestIO> = ParamsArg<R> &
+  QueryArg<R> &
   BodyArg<R, M> &
-  HeadersArg<R, M> & {
+  HeadersArg<R> & {
     signal?: AbortSignal
     /** Override the client-level validation mode for this call. */
     validate?: ValidateMode
@@ -131,15 +131,15 @@ type EncodeFlag<M extends RequestIO> = M extends 'output' ? true : false
 
 /**
  * Args for one call. The default member matches the client's request IO mode;
- * flipping `encodeRequests` per call flips the request value types with it.
+ * flipping `encodeRequests` per call flips the body value type with it.
  */
-export type RequestArgs<R extends RouteDef, M extends RequestIO = 'output'> =
+export type RequestArgs<R extends RouteDef, M extends RequestIO = 'input'> =
   | Simplify<BaseArgs<R, M> & { encodeRequests?: EncodeFlag<M> }>
   | Simplify<BaseArgs<R, OtherIO<M>> & { encodeRequests: EncodeFlag<OtherIO<M>> }>
 
 type RequiredKeys<T> = { [K in keyof T]-?: {} extends Pick<T, K> ? never : K }[keyof T]
 
-export type ArgsTuple<R extends RouteDef, M extends RequestIO = 'output'> = [
+export type ArgsTuple<R extends RouteDef, M extends RequestIO = 'input'> = [
   RequiredKeys<Simplify<BaseArgs<R, M>>>,
 ] extends [never]
   ? [args?: RequestArgs<R, M>]

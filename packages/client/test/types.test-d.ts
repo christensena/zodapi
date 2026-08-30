@@ -102,10 +102,10 @@ describe('guard narrowing', () => {
 
 describe('date codec typing', () => {
   const codecClient = createClient(codecRoutes, { baseUrl: 'http://test.local', validate: 'both' })
-  const wireClient = createClient(codecRoutes, {
+  const encodeClient = createClient(codecRoutes, {
     baseUrl: 'http://test.local',
     validate: 'both',
-    encodeRequests: false,
+    encodeRequests: true,
   })
 
   it('responses decode to Date', () => {
@@ -116,23 +116,33 @@ describe('date codec typing', () => {
     expectTypeOf<SuccessData<typeof getEvent>>().toEqualTypeOf<{ id: string; at: Date }>()
   })
 
-  it('request args are Date by default, wire strings with encodeRequests: false', () => {
-    type OutArgs = Parameters<typeof codecClient.createEvent>[0]
-    expectTypeOf<{ body: { at: Date } }>().toExtend<OutArgs>()
-    expectTypeOf<{ body: { at: string } }>().not.toExtend<OutArgs>()
-
-    type InArgs = Parameters<typeof wireClient.createEvent>[0]
+  it('body args are wire strings by default, Date with encodeRequests', () => {
+    type InArgs = Parameters<typeof codecClient.createEvent>[0]
     expectTypeOf<{ body: { at: string } }>().toExtend<InArgs>()
     expectTypeOf<{ body: { at: Date } }>().not.toExtend<InArgs>()
+
+    type EncArgs = Parameters<typeof encodeClient.createEvent>[0]
+    expectTypeOf<{ body: { at: Date } }>().toExtend<EncArgs>()
+    expectTypeOf<{ body: { at: string } }>().not.toExtend<EncArgs>()
   })
 
-  it('per-call encodeRequests flips the request value types', () => {
-    type OutArgs = Parameters<typeof codecClient.createEvent>[0]
-    expectTypeOf<{ body: { at: string }; encodeRequests: false }>().toExtend<OutArgs>()
-    expectTypeOf<{ body: { at: Date }; encodeRequests: false }>().not.toExtend<OutArgs>()
-
-    type InArgs = Parameters<typeof wireClient.createEvent>[0]
+  it('per-call encodeRequests flips the body value type', () => {
+    type InArgs = Parameters<typeof codecClient.createEvent>[0]
     expectTypeOf<{ body: { at: Date }; encodeRequests: true }>().toExtend<InArgs>()
+    expectTypeOf<{ body: { at: string }; encodeRequests: true }>().not.toExtend<InArgs>()
+
+    type EncArgs = Parameters<typeof encodeClient.createEvent>[0]
+    expectTypeOf<{ body: { at: string }; encodeRequests: false }>().toExtend<EncArgs>()
+  })
+
+  it('codec query values are always decoded, in both IO modes', () => {
+    type InArgs = Parameters<typeof codecClient.searchEvents>[0]
+    expectTypeOf<{ query: { since: Date; tags: string[] } }>().toExtend<InArgs>()
+    expectTypeOf<{ query: { since: string } }>().not.toExtend<InArgs>()
+
+    type EncArgs = Parameters<typeof encodeClient.searchEvents>[0]
+    expectTypeOf<{ query: { since: Date; tags: string[] } }>().toExtend<EncArgs>()
+    expectTypeOf<{ query: { since: string } }>().not.toExtend<EncArgs>()
   })
 })
 
@@ -159,13 +169,14 @@ describe('fullResponse typing', () => {
 })
 
 describe('query typing', () => {
-  it('defaulted and optional query keys stay omittable in both IO modes', () => {
+  it('query args are decoded values with omittable defaulted keys, in both IO modes', () => {
     expectTypeOf(client.listThings).parameter(0).toExtend<
       | {
           query?:
             | {
-                limit?: number | `${number}` | undefined
-                tags?: string | string[] | undefined
+                limit?: number | undefined
+                exact?: boolean | undefined
+                tags?: string[] | undefined
               }
             | undefined
         }
