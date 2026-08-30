@@ -53,6 +53,26 @@ export const createThing = route({
   },
 })
 
+export const BadInput = z.object({
+  error: z.object({ code: z.literal('BAD_INPUT'), message: z.string() }),
+})
+
+// Declares its own plain application/json 400; route() merges the problem+json
+// ValidationError content into it.
+export const renameThing = route({
+  alias: 'renameThing',
+  method: 'post',
+  path: '/things/{id}/rename',
+  request: {
+    params: z.object({ id: z.string() }),
+    body: { content: { 'application/json': { schema: z.object({ name: z.string() }) } } },
+  },
+  responses: {
+    200: { description: 'ok', content: { 'application/json': { schema: Thing } } },
+    400: { description: 'bad input', content: { 'application/json': { schema: BadInput } } },
+  },
+})
+
 // Declares only 200; the server handler deliberately returns 418.
 export const teapot = route({
   method: 'get',
@@ -74,7 +94,7 @@ export const badShape = route({
   },
 })
 
-export const routes = [getThing, listThings, createThing, teapot, badShape] as const
+export const routes = [getThing, listThings, createThing, renameThing, teapot, badShape] as const
 
 // Date-codec routes, exercised with a stub adapter rather than the hono app.
 export const isoDatetimeToDate = z.codec(z.iso.datetime(), z.date(), {
@@ -138,6 +158,14 @@ export function makeApp(counters: { createCalls: number }) {
         return c.json({ error: { code: 'CONFLICT' as const, existingId: '1' } }, 409)
       }
       return c.json({ id: 'new', ...body }, 201)
+    })
+    .openapi(renameThing, (c) => {
+      const { id } = c.req.valid('param')
+      const { name } = c.req.valid('json')
+      if (name === 'bad') {
+        return c.json({ error: { code: 'BAD_INPUT' as const, message: 'bad name' } }, 400)
+      }
+      return c.json({ id, name }, 200)
     })
     .openapi(teapot, (c) => c.json({ short: 'stout' } as {}, 418 as unknown as 200))
     .openapi(badShape, (c) => c.json({ n: 'not-a-number' as unknown as number }, 200))

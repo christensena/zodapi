@@ -18,7 +18,15 @@ import type { AdapterRequest } from '@zodapi/client'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 
-import { codecRoutes, createThing, getThing, makeApp, routes } from './contract.js'
+import {
+  BadInput,
+  codecRoutes,
+  createThing,
+  getThing,
+  makeApp,
+  renameThing,
+  routes,
+} from './contract.js'
 
 function makeClient(counters = { createCalls: 0 }) {
   const app = makeApp(counters)
@@ -99,6 +107,34 @@ describe('the fixed 400 validation error shape', () => {
     expect(err).toBeInstanceOf(ApiError)
     expect(err).not.toBeInstanceOf(ValidationApiError)
     expect(isValidationError(err)).toBe(true)
+  })
+
+  it("passes a route's own application/json 400 through as a plain ApiError", async () => {
+    const client = makeClient()
+    const err = await client
+      .renameThing({ params: { id: '1' }, body: { name: 'bad' } })
+      .catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(ApiError)
+    expect(err).not.toBeInstanceOf(ValidationApiError)
+    expect(matchErrorByStatus(renameThing, err, 400)).toBe(true)
+    if (matchErrorByStatus(renameThing, err, 400)) {
+      // data is the union of both merged 400 bodies; isValidationError discriminates.
+      expect(isValidationError(err)).toBe(false)
+      expect(BadInput.parse(err.data).error.code).toBe('BAD_INPUT')
+    }
+  })
+
+  it('still decodes a validation failure on a route with its own 400', async () => {
+    const client = makeClient()
+    const err = await client
+      .renameThing({ params: { id: '1' }, body: {} as { name: string } })
+      .catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(ValidationApiError)
+    if (err instanceof ValidationApiError) {
+      expect(err.target).toBe('json')
+    }
+    // The merged problem+json content makes the validation body a declared 400 too.
+    expect(matchErrorByStatus(renameThing, err, 400)).toBe(true)
   })
 })
 

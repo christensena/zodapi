@@ -17,8 +17,40 @@ describe('route()', () => {
     expect(r.getRoutingPath()).toBe('/items/:id')
   })
 
-  it('leaves an explicitly declared 400 alone', () => {
-    const custom = { description: 'my own 400' }
+  it('merges the problem+json content into an explicitly declared 400', () => {
+    const BadInput = z.object({ reason: z.string() })
+    const r = route({
+      method: 'get',
+      path: '/items',
+      responses: {
+        200: { description: 'ok' },
+        400: {
+          description: 'my own 400',
+          content: { 'application/json': { schema: BadInput } },
+        },
+      },
+    })
+    expect(r.responses[400].description).toBe('my own 400')
+    expect(r.responses[400].content['application/json'].schema).toBe(BadInput)
+    expect(r.responses[400].content['application/problem+json']).toBe(
+      validationErrorResponse.content['application/problem+json'],
+    )
+  })
+
+  it('adds the problem+json content to a content-less declared 400', () => {
+    const r = route({
+      method: 'get',
+      path: '/items',
+      responses: { 200: { description: 'ok' }, 400: { description: 'bad' } },
+    })
+    expect(r.responses[400].content).toEqual(validationErrorResponse.content)
+  })
+
+  it('keeps a declared 400 verbatim when it already declares problem+json', () => {
+    const custom = {
+      description: 'my own problem',
+      content: { 'application/problem+json': { schema: z.object({ type: z.string() }) } },
+    }
     const r = route({
       method: 'get',
       path: '/items',

@@ -38,7 +38,7 @@ createClient(routes, {
   fullResponse: false, // resolve with { data, status, headers } instead of the bare body
   headers: () => ({ authorization: `Bearer ${token}` }), // static object or (async) function
   adapter: fetchAdapter(), // transport seam
-  decoders: decodersFor(problemFlavor), // error decoders (default: zodapi's own 400)
+  decoders: decodersFor(problemFlavor), // error decoders (default: zodapi's own problem+json 400)
   onError: ({ error, attempt }) => {}, // error hook; return 'retry' to re-run the request
 })
 ```

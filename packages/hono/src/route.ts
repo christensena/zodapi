@@ -14,10 +14,20 @@ type ConvertPathType<T extends string> = T extends `${infer Start}/{${infer Para
   ? `${Start}/:${Param}${ConvertPathType<Rest>}`
   : T
 
+type ProblemJsonContent = ValidationErrorResponse['content']
+
+// A declared 400 with the ValidationError problem+json content merged into its
+// content map; kept verbatim when it already declares application/problem+json.
+type Merge400<Def> = Def extends { content: infer C }
+  ? typeof PROBLEM_JSON_CONTENT_TYPE extends keyof C
+    ? Def
+    : Omit<Def, 'content'> & { content: C & ProblemJsonContent }
+  : Def & { content: ProblemJsonContent }
+
 type With400<Responses> = 400 extends keyof Responses
-  ? Responses
+  ? Omit<Responses, 400> & { 400: Merge400<Responses[400]> }
   : '400' extends keyof Responses
-    ? Responses
+    ? Omit<Responses, '400'> & { '400': Merge400<Responses['400']> }
     : Responses & { 400: ValidationErrorResponse }
 
 export type ZodapiRouteConfig = RouteConfig & { alias?: string }
@@ -106,8 +116,10 @@ function assertParamsMatchPath(config: ZodapiRouteConfig): void {
 
 /**
  * `createRoute` from `@hono/zod-openapi` plus zodapi conventions:
- * - merges a `400` `ValidationError` response into `responses` (unless the
- *   route declares its own 400), so docs and client error types include it
+ * - merges a `400` `ValidationError` response into `responses`, so docs and
+ *   client error types include it; a route declaring its own 400 gets the
+ *   problem+json content merged into it instead (kept verbatim when it already
+ *   declares `application/problem+json`)
  * - defaults `request.body.required` to `true`, so a missing/mismatched
  *   `Content-Type` fails validation instead of silently skipping it
  * - checks `{...}` path params against the params schema keys — both as a
@@ -122,8 +134,14 @@ export function route(config: ZodapiRouteConfig): unknown {
   assertParamsMatchPath(config)
   const { alias, ...rest } = config
   const responses: Record<string, unknown> = { ...rest.responses }
-  if (responses[400] === undefined) {
+  const own400 = responses[400] as { content?: Record<string, unknown> } | undefined
+  if (own400 === undefined) {
     responses[400] = validationErrorResponse
+  } else if (own400.content?.[PROBLEM_JSON_CONTENT_TYPE] === undefined) {
+    responses[400] = {
+      ...own400,
+      content: { ...own400.content, ...validationErrorResponse.content },
+    }
   }
   let request = rest.request
   if (request?.body && request.body.required === undefined) {

@@ -8,8 +8,9 @@ that bake in the zodapi conventions while keeping idiomatic Hono (`c.req.valid`,
 
 `createRoute` plus conventions:
 
-- merges a `400` `ValidationError` response into `responses` (unless the route declares its own
-  400), so docs and client error types include it
+- merges a `400` `ValidationError` response into `responses`, so docs and client error types
+  include it; a route declaring its own 400 gets the problem+json content merged into it instead
+  (kept verbatim when it already declares `application/problem+json`)
 - defaults `request.body.required` to `true`, so a missing/mismatched `Content-Type` fails
   validation instead of silently skipping it
 - checks `{...}` path params against the params schema keys — both as a compile-time error and a
@@ -33,6 +34,16 @@ export const getUser = route({
 
 The result is a plain route object: pass it to `app.openapi(...)` on the server and into
 `createClient([...])` from `@zodapi/client`.
+
+A route that declares its own `400` keeps it, with the `ValidationError` problem+json content
+merged into its `content` map — such a route can genuinely respond 400 two ways (its custom body
+from the handler, and the zodapi validation failure from `createApp()`'s hook), and the OpenAPI
+doc now covers both. The content types disambiguate client-side: error decoding is keyed on the
+`application/problem+json` media type, so the custom `application/json` 400 body is not decoded —
+it throws a plain `ApiError`, narrowed with the guards like any other declared status (to the
+union of both bodies; `isValidationError` tells them apart) — while a validation failure decodes
+into `ValidationApiError`. A route that declares its own `application/problem+json` 400 content is
+kept fully verbatim.
 
 ## createApp()
 

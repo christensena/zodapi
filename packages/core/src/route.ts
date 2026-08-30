@@ -107,18 +107,28 @@ export type RouteByAlias<Rs extends readonly RouteDef[], A extends string> = Ext
   { alias: A }
 >
 
-/** Runtime helper: the json schema of a response definition, if it is a zod schema. */
-export function jsonSchemaOfResponse(def: RouteResponseDef | undefined): z.ZodType | undefined {
-  if (!def?.content) return undefined
+/**
+ * Runtime helper: all json content schemas of a response definition, in
+ * declaration order (a response can declare several — e.g. a 400 with a custom
+ * `application/json` body plus the merged problem+json `ValidationError`).
+ */
+export function jsonSchemasOfResponse(def: RouteResponseDef | undefined): z.ZodType[] {
+  if (!def?.content) return []
+  const schemas: z.ZodType[] = []
   for (const [media, mediaDef] of Object.entries(def.content)) {
     if (/^application\/([\w.-]+\+)?json/.test(media) && mediaDef?.schema) {
       const schema = mediaDef.schema
       if (typeof schema === 'object' && schema !== null && '_zod' in schema) {
-        return schema as z.ZodType
+        schemas.push(schema as z.ZodType)
       }
     }
   }
-  return undefined
+  return schemas
+}
+
+/** Runtime helper: the first json content schema of a response definition, if it is a zod schema. */
+export function jsonSchemaOfResponse(def: RouteResponseDef | undefined): z.ZodType | undefined {
+  return jsonSchemasOfResponse(def)[0]
 }
 
 /** Runtime helper: resolve a response definition for a concrete status, honouring '4XX'-style ranges and 'default'. */
