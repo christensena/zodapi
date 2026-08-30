@@ -1,6 +1,6 @@
 {
   "name": "@zodapi/client",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Typed fetch/axios client over zodapi route contracts with optional zod validation",
   "license": "MIT",
   "repository": {
