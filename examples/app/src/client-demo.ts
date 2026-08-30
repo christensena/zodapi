@@ -9,6 +9,7 @@ import * as api from '@zodapi/example-api'
 
 const client = createClient(api.routes, {
   baseUrl: `http://localhost:${process.env.PORT ?? 3000}`,
+  encodeRequests: true,
 })
 
 // Path-addressed calls
@@ -20,7 +21,7 @@ console.log(
 )
 
 // Alias-addressed calls (zodios style)
-const ada = await client.getUser({ params: { id: '1' } })
+const ada = await client.getUser({ params: { id: 1 } })
 console.log('getUser(1) →', ada.name, ada.email)
 
 // Declared error responses throw ApiError; guards narrow status AND data
@@ -48,7 +49,7 @@ try {
 
 // isErrorFromRoute narrows to the union of the route's declared errors
 try {
-  await client.getUser({ params: { id: 'nope' } })
+  await client.getUser({ params: { id: 456 } })
 } catch (err) {
   if (isErrorFromRoute(api.getUser, err) && err.status === 404) {
     console.log('404 →', err.data.error.message)

@@ -2,16 +2,16 @@ import * as api from '@zodapi/example-api'
 import type { User } from '@zodapi/example-api'
 import { createApp } from '@zodapi/hono'
 
-const users = new Map<string, User>(
+const users = new Map<number, User>(
   [
     {
-      id: '1',
+      id: 1,
       name: 'Ada Lovelace',
       email: 'ada@example.com',
       tags: ['math', 'pioneer'],
     },
     {
-      id: '2',
+      id: 2,
       name: 'Grace Hopper',
       email: 'grace@example.com',
       tags: ['compilers'],
@@ -60,7 +60,7 @@ export const app = createApp()
         409,
       )
     }
-    const user: User = { id: crypto.randomUUID(), ...newUser }
+    const user: User = { id: Math.round(Math.random() * 10000), ...newUser }
     users.set(user.id, user)
     return c.json(user, 201)
   })

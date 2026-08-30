@@ -3,7 +3,7 @@ import { queryArray, route } from '@zodapi/hono'
 
 export const User = z
   .object({
-    id: z.string(),
+    id: z.number(),
     name: z.string(),
     email: z.email(),
     tags: z.array(z.string()),
@@ -26,7 +26,7 @@ export const Conflict = z
     error: z.object({
       code: z.literal('CONFLICT'),
       message: z.string(),
-      existingId: z.string(),
+      existingId: z.number(),
     }),
   })
   .openapi('Conflict')
@@ -63,7 +63,7 @@ export const getUser = route({
   method: 'get',
   path: '/users/{id}',
   request: {
-    params: z.object({ id: z.string().min(1) }),
+    params: z.object({ id: z.coerce.number().min(0) }),
   },
   responses: {
     200: {
@@ -101,7 +101,7 @@ export const deleteUser = route({
   method: 'delete',
   path: '/users/{id}',
   request: {
-    params: z.object({ id: z.string().min(1) }),
+    params: z.object({ id: z.coerce.number().min(1) }),
   },
   responses: {
     204: { description: 'Deleted' },
