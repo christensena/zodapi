@@ -1,5 +1,5 @@
 import { route, z } from '@zodapi/hono'
-import { describe, it } from 'vitest'
+import { describe, expectTypeOf, it } from 'vitest'
 
 const ok = { 200: { description: 'ok' } }
 
@@ -18,38 +18,32 @@ describe('route() params/path type check', () => {
   })
 
   it('rejects a path param missing from the params schema', () => {
-    route(
+    route({
       // @ts-expect-error 'id' is in the path but not the params schema
-      {
-        method: 'get',
-        path: '/things/{id}',
-        request: { params: z.object({ userId: z.string() }) },
-        responses: ok,
-      },
-    )
+      method: 'get',
+      path: '/things/{id}',
+      request: { params: z.object({ userId: z.string() }) },
+      responses: ok,
+    })
   })
 
   it('rejects a parametrized path with no params schema', () => {
-    route(
+    route({
       // @ts-expect-error 'id' is in the path but there is no params schema
-      {
-        method: 'get',
-        path: '/things/{id}',
-        responses: ok,
-      },
-    )
+      method: 'get',
+      path: '/things/{id}',
+      responses: ok,
+    })
   })
 
   it('rejects params schema keys not in the path', () => {
-    route(
+    route({
       // @ts-expect-error 'extra' is not a path param
-      {
-        method: 'get',
-        path: '/things/{id}',
-        request: { params: z.object({ id: z.string(), extra: z.string() }) },
-        responses: ok,
-      },
-    )
+      method: 'get',
+      path: '/things/{id}',
+      request: { params: z.object({ id: z.string(), extra: z.string() }) },
+      responses: ok,
+    })
   })
 
   it('skips the check for schemas with non-literal keys', () => {
@@ -62,15 +56,13 @@ describe('route() params/path type check', () => {
   })
 
   it('rejects an empty params schema on a parametrized path', () => {
-    route(
+    route({
       // @ts-expect-error z.object({}) declares no params
-      {
-        method: 'get',
-        path: '/things/{id}',
-        request: { params: z.object({}) },
-        responses: ok,
-      },
-    )
+      method: 'get',
+      path: '/things/{id}',
+      request: { params: z.object({}) },
+      responses: ok,
+    })
   })
 })
 
@@ -94,51 +86,43 @@ describe('route() wire string type check', () => {
   })
 
   it('rejects z.coerce.number<number>(), indistinguishable from z.number()', () => {
-    route(
+    route({
       // @ts-expect-error the narrowed input type erases the coercion evidence
-      {
-        method: 'get',
-        path: '/things',
-        request: { query: z.object({ n: z.coerce.number<number>() }) },
-        responses: ok,
-      },
-    )
+      method: 'get',
+      path: '/things',
+      request: { query: z.object({ n: z.coerce.number<number>() }) },
+      responses: ok,
+    })
   })
 
   it('rejects bare z.number()/z.boolean() in a query schema', () => {
-    route(
+    route({
       // @ts-expect-error `n` and `b` can never match a wire string
-      {
-        method: 'get',
-        path: '/things',
-        request: { query: z.object({ n: z.number(), b: z.boolean() }) },
-        responses: ok,
-      },
-    )
+      method: 'get',
+      path: '/things',
+      request: { query: z.object({ n: z.number(), b: z.boolean() }) },
+      responses: ok,
+    })
   })
 
   it('rejects a bare z.number() path param', () => {
-    route(
+    route({
       // @ts-expect-error `id` can never match a wire string
-      {
-        method: 'get',
-        path: '/things/{id}',
-        request: { params: z.object({ id: z.number() }) },
-        responses: ok,
-      },
-    )
+      method: 'get',
+      path: '/things/{id}',
+      request: { params: z.object({ id: z.number() }) },
+      responses: ok,
+    })
   })
 
   it('rejects an optional/defaulted bare number, which is still never a string', () => {
-    route(
+    route({
       // @ts-expect-error `limit` can never match a wire string
-      {
-        method: 'get',
-        path: '/things',
-        request: { query: z.object({ limit: z.number().optional() }) },
-        responses: ok,
-      },
-    )
+      method: 'get',
+      path: '/things',
+      request: { query: z.object({ limit: z.number().optional() }) },
+      responses: ok,
+    })
   })
 
   it('accepts string arrays but rejects number arrays for repeated query keys', () => {
@@ -148,15 +132,13 @@ describe('route() wire string type check', () => {
       request: { query: z.object({ tags: z.array(z.string()).optional() }) },
       responses: ok,
     })
-    route(
+    route({
       // @ts-expect-error `ids` items can never match wire strings
-      {
-        method: 'get',
-        path: '/things',
-        request: { query: z.object({ ids: z.array(z.number()) }) },
-        responses: ok,
-      },
-    )
+      method: 'get',
+      path: '/things',
+      request: { query: z.object({ ids: z.array(z.number()) }) },
+      responses: ok,
+    })
   })
 
   it('skips the check for schemas with non-literal keys', () => {
@@ -166,5 +148,17 @@ describe('route() wire string type check', () => {
       request: { query: z.looseObject({ n: z.number() }) },
       responses: ok,
     })
+  })
+
+  it('collapses the config parameter to just the error object on failure', () => {
+    const bad = {
+      method: 'get',
+      path: '/things',
+      request: { query: z.object({ n: z.number() }) },
+      responses: ok,
+    } as const
+    expectTypeOf<Parameters<typeof route<typeof bad>>[0]>().toEqualTypeOf<{
+      'query values that can never match a wire string (use z.coerce.number() or z.stringbool())': 'n'
+    }>()
   })
 })

@@ -52,12 +52,12 @@ type ParamSchemaKeys<R extends ZodapiRouteConfig> = R['request'] extends {
     : PathParamNames<R['path']>
   : never
 
-/** `unknown` when the `{...}` path params and the params schema keys agree; an error-shaped type otherwise. */
-type ParamsCheck<R extends ZodapiRouteConfig> = [
+/** `never` when the `{...}` path params and the params schema keys agree; an error-shaped type otherwise. */
+type ParamsIssues<R extends ZodapiRouteConfig> = [
   Exclude<PathParamNames<R['path']>, ParamSchemaKeys<R>>,
 ] extends [never]
   ? [Exclude<ParamSchemaKeys<R>, PathParamNames<R['path']>>] extends [never]
-    ? unknown
+    ? never
     : {
         'params schema declares keys missing from the path': Exclude<
           ParamSchemaKeys<R>,
@@ -93,12 +93,12 @@ type NonWireKeys<S> = S extends z.ZodType
     : never
   : never
 
-/** `unknown` when every params/query value schema can accept a wire string; an error-shaped type otherwise. */
-type WireCheck<R extends ZodapiRouteConfig> = [
+/** `never` when every params/query value schema can accept a wire string; an error-shaped type otherwise. */
+type WireIssues<R extends ZodapiRouteConfig> = [
   NonWireKeys<R['request'] extends { params: infer S } ? S : never>,
 ] extends [never]
   ? [NonWireKeys<R['request'] extends { query: infer S } ? S : never>] extends [never]
-    ? unknown
+    ? never
     : {
         'query values that can never match a wire string (use z.coerce.number() or z.stringbool())': NonWireKeys<
           R['request'] extends { query: infer S } ? S : never
@@ -109,6 +109,15 @@ type WireCheck<R extends ZodapiRouteConfig> = [
         R['request'] extends { params: infer S } ? S : never
       >
     }
+
+type RouteIssues<R extends ZodapiRouteConfig> = ParamsIssues<R> | WireIssues<R>
+
+// On success the parameter type is R itself; on failure it is only the small
+// error object — keeping the inferred config type out of the failure branch
+// is what keeps route()'s type errors short.
+type ValidatedRouteConfig<R extends ZodapiRouteConfig> = [RouteIssues<R>] extends [never]
+  ? R
+  : RouteIssues<R>
 
 export type ZodapiRoute<R extends ZodapiRouteConfig> = Omit<R, 'responses'> & {
   responses: With400<R['responses']>
@@ -175,7 +184,7 @@ function assertParamsMatchPath(config: ZodapiRouteConfig): void {
  * server and into `createClient([...])` on the client.
  */
 export function route<const R extends ZodapiRouteConfig>(
-  config: R & ParamsCheck<R> & WireCheck<R>,
+  config: ValidatedRouteConfig<R>,
 ): ZodapiRoute<R>
 export function route(config: ZodapiRouteConfig): unknown {
   assertParamsMatchPath(config)
