@@ -10,7 +10,7 @@ import { z } from 'zod'
  * `a=x` forms validate.
  *
  * Item values are raw strings on the wire, so the item schema must accept a
- * string: `z.string()`, an enum, `z.coerce.number<number | string>()`,
+ * string: `z.string()`, an enum, ``z.coerce.number<number | `${number}`>()``,
  * `z.stringbool()` — a bare `z.number()`/`z.boolean()` item fails validation
  * on every request.
  */

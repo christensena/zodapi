@@ -50,9 +50,9 @@ export interface ErrorContext {
 export type OnError = (context: ErrorContext) => 'retry' | void | Promise<'retry' | void>
 
 /**
- * Which side of the request schemas the caller supplies: 'input' (wire form,
- * the default) or 'output' (decoded form, when `encodeRequests` is on — e.g.
- * `Date` objects where a contract uses date codecs).
+ * Which side of the request schemas the caller supplies: 'output' (decoded
+ * form, the default — e.g. `Date` objects where a contract uses date codecs)
+ * or 'input' (wire form, when `encodeRequests` is off).
  */
 export type RequestIO = 'input' | 'output'
 
@@ -60,8 +60,27 @@ type Simplify<T> = { [K in keyof T]: T[K] } & {}
 
 type OtherIO<M extends RequestIO> = M extends 'input' ? 'output' : 'input'
 
+type OptionalInputKeys<S extends z.ZodType> = {
+  [K in keyof z.input<S>]-?: undefined extends z.input<S>[K] ? K : never
+}[keyof z.input<S>]
+
+// Output-mode arg values: typed z.output, but keys the input side lets the
+// caller omit (`.default()`, `.optional()`) stay omittable — nothing is
+// encoded for codec-less schemas, so an omitted defaulted key is simply not
+// sent and the server applies the default.
+type OutputVal<S extends z.ZodType> =
+  z.input<S> extends Record<string, unknown>
+    ? z.output<S> extends Record<string, unknown>
+      ? Simplify<
+          { [K in Exclude<keyof z.output<S>, OptionalInputKeys<S>>]: z.output<S>[K] } & {
+            [K in Extract<keyof z.output<S>, OptionalInputKeys<S>>]?: z.output<S>[K]
+          }
+        >
+      : z.output<S>
+    : z.output<S>
+
 type SchemaVal<S extends z.ZodType, M extends RequestIO> = M extends 'output'
-  ? z.output<S>
+  ? OutputVal<S>
   : z.input<S>
 
 type ParamsArg<R extends RouteDef, M extends RequestIO> = R['request'] extends {
@@ -114,13 +133,13 @@ type EncodeFlag<M extends RequestIO> = M extends 'output' ? true : false
  * Args for one call. The default member matches the client's request IO mode;
  * flipping `encodeRequests` per call flips the request value types with it.
  */
-export type RequestArgs<R extends RouteDef, M extends RequestIO = 'input'> =
+export type RequestArgs<R extends RouteDef, M extends RequestIO = 'output'> =
   | Simplify<BaseArgs<R, M> & { encodeRequests?: EncodeFlag<M> }>
   | Simplify<BaseArgs<R, OtherIO<M>> & { encodeRequests: EncodeFlag<OtherIO<M>> }>
 
 type RequiredKeys<T> = { [K in keyof T]-?: {} extends Pick<T, K> ? never : K }[keyof T]
 
-export type ArgsTuple<R extends RouteDef, M extends RequestIO = 'input'> = [
+export type ArgsTuple<R extends RouteDef, M extends RequestIO = 'output'> = [
   RequiredKeys<Simplify<BaseArgs<R, M>>>,
 ] extends [never]
   ? [args?: RequestArgs<R, M>]

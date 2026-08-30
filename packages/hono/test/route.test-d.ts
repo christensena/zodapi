@@ -80,11 +80,11 @@ describe('route() wire string type check', () => {
       method: 'get',
       path: '/things/{id}',
       request: {
-        params: z.object({ id: z.coerce.number<number | string>().int() }),
+        params: z.object({ id: z.coerce.number<number | `${number}`>().int() }),
         query: z.object({
           q: z.string().optional(),
           role: z.enum(['admin', 'member']).optional(),
-          limit: z.coerce.number<number | string>().int().default(20),
+          limit: z.coerce.number<number | `${number}`>().int().default(20),
           exact: z.stringbool().optional(),
           loose: z.coerce.number(), // input `unknown` — passes unchecked
           when: z.iso.datetime().optional(),

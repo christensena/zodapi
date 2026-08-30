@@ -76,7 +76,7 @@ type ParamsCheck<R extends ZodapiRouteConfig> = [
 // neither fails validation on every request — bare z.number()/z.boolean()
 // type-check but 400 at runtime. Coercion must show in the input type, since
 // z.coerce.number<number>() is structurally identical to z.number(): use
-// z.coerce.number<number | string>() or z.stringbool(). Unknowable inputs
+// z.coerce.number<number | `${number}`>() or z.stringbool(). Unknowable inputs
 // (plain z.coerce.number(), z.any()), non-object schemas, and shapes with
 // non-literal keys pass unchecked.
 type NonWireKeys<S> = S extends z.ZodType
@@ -100,12 +100,12 @@ type WireCheck<R extends ZodapiRouteConfig> = [
   ? [NonWireKeys<R['request'] extends { query: infer S } ? S : never>] extends [never]
     ? unknown
     : {
-        'query values that can never match a wire string (use z.coerce.number<number | string> or z.stringbool)': NonWireKeys<
+        'query values that can never match a wire string (use z.coerce.number<number | `${number}`> or z.stringbool)': NonWireKeys<
           R['request'] extends { query: infer S } ? S : never
         >
       }
   : {
-      'params values that can never match a wire string (use z.coerce.number<number | string> or z.stringbool)': NonWireKeys<
+      'params values that can never match a wire string (use z.coerce.number<number | `${number}`> or z.stringbool)': NonWireKeys<
         R['request'] extends { params: infer S } ? S : never
       >
     }
@@ -166,7 +166,7 @@ function assertParamsMatchPath(config: ZodapiRouteConfig): void {
  * - rejects at compile time params/query value schemas that can never match
  *   the wire's raw strings — bare `z.number()`/`z.boolean()` type-check but
  *   400 on every request; declare the wire form in the input type instead:
- *   `z.coerce.number<number | string>()`, `z.stringbool()` (not
+ *   ``z.coerce.number<number | `${number}`>()``, `z.stringbool()` (not
  *   `z.coerce.boolean()`, which coerces any non-empty string — `"false"`
  *   included — to `true`)
  * - carries an optional `alias` for zodios-style client method names

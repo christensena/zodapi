@@ -325,6 +325,7 @@ describe('date codecs', () => {
       baseUrl: 'http://test.local',
       adapter,
       validate: 'both',
+      encodeRequests: false,
     })
     await client.createEvent({ body: { at: '2024-01-02T03:04:05Z', day: '2024-01-02' } })
     expect(sentBody(calls)).toEqual({ at: '2024-01-02T03:04:05.000Z', day: '2024-01-02' })
@@ -350,6 +351,7 @@ describe('date codecs', () => {
       baseUrl: 'http://test.local',
       adapter,
       validate: 'both',
+      encodeRequests: false,
     })
     await client.createEvent({
       body: { at: new Date('2024-01-02T03:04:05Z') },

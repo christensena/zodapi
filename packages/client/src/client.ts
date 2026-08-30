@@ -40,8 +40,10 @@ export interface ClientOptions {
   /**
    * Supply request data in decoded (schema output) form — e.g. `Date` objects
    * where the contract uses date codecs — and let the client encode it to the
-   * wire form with `z.encode`. Request args are then typed with `z.output`
-   * instead of `z.input`. Encoding is a serialization concern, independent of
+   * wire form with `z.encode`. On by default; request args are typed with
+   * `z.output` (keys the input side lets the caller omit, like `.default()`ed
+   * query params, stay optional). Pass `false` to supply wire-form `z.input`
+   * values instead. Encoding is a serialization concern, independent of
    * `validate`: codec-bearing request data is always encoded (and `z.encode`
    * validates as it encodes, so an invalid value throws
    * `RequestValidationError` even with `validate: 'none'`). Overridable per
@@ -153,12 +155,12 @@ export function createClient<const Rs extends readonly RouteDef[], const O exten
   options: O,
 ): ZodapiClient<
   Rs,
-  O extends { encodeRequests: true } ? 'output' : 'input',
+  O extends { encodeRequests: false } ? 'input' : 'output',
   O extends { fullResponse: true } ? true : false
 > {
   const adapter = options.adapter ?? fetchAdapter()
   const defaultValidate = options.validate ?? 'response'
-  const defaultEncodeRequests = options.encodeRequests ?? false
+  const defaultEncodeRequests = options.encodeRequests ?? true
   const defaultFullResponse = options.fullResponse ?? false
   const decoders = options.decoders ?? [zodapiValidationDecoder]
 
@@ -303,7 +305,7 @@ export function createClient<const Rs extends readonly RouteDef[], const O exten
   }
   return client as ZodapiClient<
     Rs,
-    O extends { encodeRequests: true } ? 'output' : 'input',
+    O extends { encodeRequests: false } ? 'input' : 'output',
     O extends { fullResponse: true } ? true : false
   >
 }

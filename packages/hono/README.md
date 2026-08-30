@@ -55,17 +55,19 @@ instead:
 
 ```ts
 query: z.object({
-  limit: z.coerce.number<number | string>().int().max(100).default(20),
+  limit: z.coerce.number<number | `${number}`>().int().max(100).default(20),
   exact: z.stringbool().optional(),
   tags: queryArray(z.string()).optional(),
 })
 ```
 
-- `z.coerce.number<number | string>()` coerces the wire string while the client keeps accepting a
-  plain `number`. The type argument matters: plain `z.coerce.number()` types its input as
-  `unknown`, and `z.coerce.number<number>()` is indistinguishable from `z.number()` at the type
-  level, so neither tells the compile-time check (or the client's argument types) that a string
-  is welcome.
+- ``z.coerce.number<number | `${number}`>()`` coerces the wire string; the template-literal input
+  type admits only numeric strings, so a `@zodapi/client` in wire-form mode with
+  `encodeRequests: false` accepts `42` or `'42'` but not `'abc'` (in the default encode mode args
+  are typed `z.output` — a plain `number`). The type argument matters: plain `z.coerce.number()` types its
+  input as `unknown`, and `z.coerce.number<number>()` is indistinguishable from `z.number()` at
+  the type level, so neither tells the compile-time check (or the client's argument types) which
+  strings are welcome.
 - `z.stringbool()` parses `"true"`/`"false"` (and friends) into a boolean. Avoid
   `z.coerce.boolean()`: it applies JS truthiness, so any non-empty string — `"false"` included —
   coerces to `true`.

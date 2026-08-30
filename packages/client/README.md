@@ -34,7 +34,7 @@ request schemas; return types are the union of the route's declared 2xx json bod
 createClient(routes, {
   baseUrl: 'http://localhost:3000',
   validate: 'response', // 'none' | 'request' | 'response' | 'both' (default 'response')
-  encodeRequests: false, // pass decoded (z.output) request values, encoded to the wire via z.encode
+  encodeRequests: true, // default: pass decoded (z.output) request values; false = wire-form (z.input) values
   fullResponse: false, // resolve with { data, status, headers } instead of the bare body
   headers: () => ({ authorization: `Bearer ${token}` }), // static object or (async) function
   adapter: fetchAdapter(), // transport seam
@@ -61,16 +61,21 @@ createClient(routes, {
   to disable decoding entirely.
 - **Query arrays** are serialised with the `[]` key suffix (`tags[]=a&tags[]=b`), matching the
   normalisation `createApp()` from `@zodapi/hono` applies at the edge.
+- **Request args are decoded values by default.** `encodeRequests` is on unless disabled: you pass
+  schema-output values — `Date` objects where a contract uses date codecs, a plain `number` for a
+  coerced query param — and the client `z.encode`s codec-bearing data to its wire form. Args are
+  typed with `z.output`, except that keys the input side lets you omit (`.default()`ed or
+  `.optional()` query params) stay optional. Encoding is a serialization concern independent of
+  `validate`, though `z.encode` validates as it encodes, so an invalid value throws
+  `RequestValidationError` even with request validation off. Pass `encodeRequests: false`
+  (client-level or per call, flipping the arg types to `z.input`) to supply wire-form values
+  instead; `z.encode` rejects one-way transforms, so a schema mixing a codec with `queryArray()`
+  cannot be encoded and needs this mode.
 - **Codecs** (e.g. the date codecs `@zodapi/codegen` emits with its `dates` options) only decode
   when response validation runs, so the client fails fast — before sending — when a 2xx response
-  schema with a codec would be skipped (`validate` must be `'response'` or `'both'`). Validated
-  codec-bearing request data is re-encoded to its wire form (a date-only codec stays `YYYY-MM-DD`
-  instead of being `JSON.stringify`'d as a full datetime). With `encodeRequests: true`
-  (client-level or per call, flipping the request arg types from `z.input` to `z.output`) you pass
-  decoded values — `Date` objects — and the client `z.encode`s them; encoding is a serialization
-  concern independent of `validate`, though `z.encode` validates as it encodes, so an invalid
-  value throws `RequestValidationError` even with request validation off. `z.encode` rejects
-  one-way transforms, so a schema mixing a codec with `queryArray()` cannot be encoded.
+  schema with a codec would be skipped (`validate` must be `'response'` or `'both'`). In wire-form
+  mode, validated codec-bearing request data is re-encoded to its wire form (a date-only codec
+  stays `YYYY-MM-DD` instead of being `JSON.stringify`'d as a full datetime).
 - **Raw response access** goes through `fullResponse` (client-level default, or per call in either
   direction): the call resolves with `{ data, status, headers }` — `data` validated/decoded exactly
   as without the envelope, `headers` the raw `Headers` — for pagination headers, tests, and the

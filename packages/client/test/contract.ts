@@ -26,7 +26,7 @@ export const listThings = route({
   path: '/things',
   request: {
     query: z.object({
-      limit: z.coerce.number<number | string>().int().min(1).default(10),
+      limit: z.coerce.number<number | `${number}`>().int().min(1).default(10),
       tags: queryArray(z.string()).optional(),
     }),
   },

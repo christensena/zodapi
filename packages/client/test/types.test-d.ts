@@ -102,10 +102,10 @@ describe('guard narrowing', () => {
 
 describe('date codec typing', () => {
   const codecClient = createClient(codecRoutes, { baseUrl: 'http://test.local', validate: 'both' })
-  const encodeClient = createClient(codecRoutes, {
+  const wireClient = createClient(codecRoutes, {
     baseUrl: 'http://test.local',
     validate: 'both',
-    encodeRequests: true,
+    encodeRequests: false,
   })
 
   it('responses decode to Date', () => {
@@ -116,23 +116,23 @@ describe('date codec typing', () => {
     expectTypeOf<SuccessData<typeof getEvent>>().toEqualTypeOf<{ id: string; at: Date }>()
   })
 
-  it('request args are wire strings by default, Date with encodeRequests', () => {
-    type InArgs = Parameters<typeof codecClient.createEvent>[0]
+  it('request args are Date by default, wire strings with encodeRequests: false', () => {
+    type OutArgs = Parameters<typeof codecClient.createEvent>[0]
+    expectTypeOf<{ body: { at: Date } }>().toExtend<OutArgs>()
+    expectTypeOf<{ body: { at: string } }>().not.toExtend<OutArgs>()
+
+    type InArgs = Parameters<typeof wireClient.createEvent>[0]
     expectTypeOf<{ body: { at: string } }>().toExtend<InArgs>()
     expectTypeOf<{ body: { at: Date } }>().not.toExtend<InArgs>()
-
-    type EncArgs = Parameters<typeof encodeClient.createEvent>[0]
-    expectTypeOf<{ body: { at: Date } }>().toExtend<EncArgs>()
-    expectTypeOf<{ body: { at: string } }>().not.toExtend<EncArgs>()
   })
 
   it('per-call encodeRequests flips the request value types', () => {
-    type InArgs = Parameters<typeof codecClient.createEvent>[0]
-    expectTypeOf<{ body: { at: Date }; encodeRequests: true }>().toExtend<InArgs>()
-    expectTypeOf<{ body: { at: string }; encodeRequests: true }>().not.toExtend<InArgs>()
+    type OutArgs = Parameters<typeof codecClient.createEvent>[0]
+    expectTypeOf<{ body: { at: string }; encodeRequests: false }>().toExtend<OutArgs>()
+    expectTypeOf<{ body: { at: Date }; encodeRequests: false }>().not.toExtend<OutArgs>()
 
-    type EncArgs = Parameters<typeof encodeClient.createEvent>[0]
-    expectTypeOf<{ body: { at: string }; encodeRequests: false }>().toExtend<EncArgs>()
+    type InArgs = Parameters<typeof wireClient.createEvent>[0]
+    expectTypeOf<{ body: { at: Date }; encodeRequests: true }>().toExtend<InArgs>()
   })
 })
 
@@ -159,11 +159,14 @@ describe('fullResponse typing', () => {
 })
 
 describe('query typing', () => {
-  it('queryArray keeps array input typing', () => {
+  it('defaulted and optional query keys stay omittable in both IO modes', () => {
     expectTypeOf(client.listThings).parameter(0).toExtend<
       | {
           query?:
-            | { limit?: number | string | undefined; tags?: string | string[] | undefined }
+            | {
+                limit?: number | `${number}` | undefined
+                tags?: string | string[] | undefined
+              }
             | undefined
         }
       | undefined

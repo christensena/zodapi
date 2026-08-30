@@ -9,7 +9,6 @@ import * as api from '@zodapi/example-api'
 
 const client = createClient(api.routes, {
   baseUrl: `http://localhost:${process.env.PORT ?? 3000}`,
-  encodeRequests: true,
 })
 
 // Path-addressed calls
