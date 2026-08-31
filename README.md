@@ -112,12 +112,20 @@ zodapi-codegen openapi.json -o contract.ts   # or: import { generateContract } f
 ```
 
 The generated file imports only `zod` and `@zodapi/core`: one exported const per
-`components/schemas` entry (component name = const name, recursion via shape getters), one plain
-`RouteDef` object per operation (`operationId` becomes the client `alias`; no alias without one),
-and a `routes` tuple ready for `createClient(routes)`. The spec's declared responses are taken
-verbatim — nothing (like the zodapi `400`) is injected. A `problemFlavor` const
-(`'zodapi' | 'problem-details' | undefined`, detected from the spec's error responses) is exported
-for `decodersFor(...)`. Output is unformatted; run your formatter over it.
+`components/schemas` entry (component name = const name, recursion via shape getters), one
+`route({ ... })` call per operation (`operationId` becomes the client `alias`; no alias without
+one), and a `routes` tuple ready for `createClient(routes)`. Because the operations go through the
+same `route()` as a hand-written contract, a generated contract also mounts on a `createApp()`
+server — and carries the same injected `400`: an operation whose spec declares none gets the
+zodapi `ValidationError` response, and one that declares its own keeps it with the problem+json
+content merged alongside. A `problemFlavor` const (`'zodapi' | 'problem-details' | undefined`,
+detected from the spec's error responses) is exported for `decodersFor(...)`. Output is
+unformatted; run your formatter over it.
+
+Numeric and boolean path/query parameters are wrapped in `wireNumber(...)` / `wireBoolean(...)`,
+which decode the raw string the wire delivers without altering the declared schema — so the
+document generated from the contract still matches the source one. (Hand-written contracts have no
+spec to reproduce and use plain `z.coerce.number()` / `z.stringbool()` instead.)
 
 Fidelity is enforced by a round-trip test: a comprehensive hand-written contract is serialized to
 OpenAPI, fed through the generator, and the doc emitted from the generated contract must equal the
