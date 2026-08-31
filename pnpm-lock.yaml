@@ -56,18 +56,9 @@ importers:
 
   examples/api:
     dependencies:
-      '@hono/zod-openapi':
-        specifier: 'catalog:'
-        version: 1.6.1(hono@4.13.5)(zod@4.4.3)
       '@zodapi/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@zodapi/hono':
-        specifier: workspace:*
-        version: link:../../packages/hono
-      hono:
-        specifier: 'catalog:'
-        version: 4.13.5
       zod:
         specifier: 'catalog:'
         version: 4.4.3

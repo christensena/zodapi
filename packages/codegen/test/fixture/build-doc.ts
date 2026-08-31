@@ -1,5 +1,5 @@
 // Mounts routes (hand-written or generated) and emits the OpenAPI 3.1 doc.
-// createRoute() only adds getRoutingPath — unlike @zodapi/hono's route() it
+// createRoute() only adds getRoutingPath — unlike route() from @zodapi/core it
 // injects nothing, so declared responses pass through verbatim.
 import { createRoute } from '@hono/zod-openapi'
 import type { RouteDef } from '@zodapi/core'

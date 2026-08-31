@@ -1,5 +1,5 @@
-import { z } from '@hono/zod-openapi'
-import { queryArray, route } from '@zodapi/hono'
+import { queryArray, route } from '@zodapi/core'
+import { z } from 'zod'
 
 export const User = z
   .object({
@@ -8,17 +8,17 @@ export const User = z
     email: z.email(),
     tags: z.array(z.string()),
   })
-  .openapi('User')
+  .meta({ id: 'User' })
 export type User = z.infer<typeof User>
 
-export const NewUser = User.omit({ id: true }).openapi('NewUser')
+export const NewUser = User.omit({ id: true }).meta({ id: 'NewUser' })
 export type NewUser = z.infer<typeof NewUser>
 
 export const NotFound = z
   .object({
     error: z.object({ code: z.literal('NOT_FOUND'), message: z.string() }),
   })
-  .openapi('NotFound')
+  .meta({ id: 'NotFound' })
 export type NotFound = z.infer<typeof NotFound>
 
 export const Conflict = z
@@ -29,7 +29,7 @@ export const Conflict = z
       existingId: z.number(),
     }),
   })
-  .openapi('Conflict')
+  .meta({ id: 'Conflict' })
 export type Conflict = z.infer<typeof Conflict>
 
 export const listUsers = route({

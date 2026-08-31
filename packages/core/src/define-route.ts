@@ -1,6 +1,7 @@
-import { createRoute, type RouteConfig } from '@hono/zod-openapi'
-import { PROBLEM_JSON_CONTENT_TYPE, ValidationError } from '@zodapi/core'
 import type { z } from 'zod'
+
+import type { Method } from './route.js'
+import { PROBLEM_JSON_CONTENT_TYPE, ValidationError } from './validation-error.js'
 
 /** The 400 response definition `route()` adds to every route. */
 export const validationErrorResponse = {
@@ -9,6 +10,73 @@ export const validationErrorResponse = {
 } as const
 
 type ValidationErrorResponse = typeof validationErrorResponse
+
+/** A parameter group (path/query/cookie): a zod object, or one behind a transform. */
+type RouteParameter = z.ZodObject | z.ZodPipe
+
+interface MediaTypeConfig {
+  schema?: unknown
+  example?: unknown
+  examples?: Record<string, unknown> | undefined
+  encoding?: Record<string, unknown> | undefined
+  itemSchema?: unknown
+}
+
+interface RequestBodyConfig {
+  description?: string | undefined
+  content: Record<string, MediaTypeConfig | undefined>
+  required?: boolean | undefined
+}
+
+interface ResponseConfig {
+  description?: string | undefined
+  summary?: string | undefined
+  headers?: z.ZodObject | Record<string, unknown> | undefined
+  links?: Record<string, unknown> | undefined
+  content?: Record<string, MediaTypeConfig | undefined> | undefined
+}
+
+/**
+ * The config `route()` accepts. Mirrors `RouteConfig` from
+ * `@hono/zod-openapi`/`@asteasolutions/zod-to-openapi` closely enough that the
+ * result drops straight into `app.openapi(...)`, but is expressed in zod types
+ * alone so contracts need no HTTP dependency. The request/response shapes are
+ * exact (they drive every inference); the OpenAPI documentation fields are
+ * typed loosely, and anything they reject is still caught by `app.openapi()`.
+ */
+export interface ZodapiRouteConfig {
+  method: Method
+  path: string
+  /** zodios-style client method name. Stripped from the OpenAPI document. */
+  alias?: string | undefined
+  request?:
+    | {
+        body?: RequestBodyConfig | undefined
+        params?: RouteParameter | undefined
+        query?: RouteParameter | undefined
+        cookies?: RouteParameter | undefined
+        headers?: RouteParameter | z.ZodType[] | undefined
+      }
+    | undefined
+  responses: Record<string | number, ResponseConfig>
+  /**
+   * Hono middleware. Typed as `unknown` to keep hono out of core — the `const`
+   * type parameter on `route()` captures the real type, so hono still infers
+   * the handler's `Env` from it.
+   */
+  middleware?: unknown
+  summary?: string | undefined
+  description?: string | undefined
+  operationId?: string | undefined
+  tags?: readonly string[] | undefined
+  deprecated?: boolean | undefined
+  security?: readonly Record<string, readonly string[]>[] | undefined
+  servers?: readonly Record<string, unknown>[] | undefined
+  externalDocs?: Record<string, unknown> | undefined
+  parameters?: readonly Record<string, unknown>[] | undefined
+  callbacks?: Record<string, unknown> | undefined
+  [extension: `x-${string}`]: unknown
+}
 
 type ConvertPathType<T extends string> = T extends `${infer Start}/{${infer Param}}${infer Rest}`
   ? `${Start}/:${Param}${ConvertPathType<Rest>}`
@@ -29,8 +97,6 @@ type With400<Responses> = 400 extends keyof Responses
   : '400' extends keyof Responses
     ? Omit<Responses, '400'> & { '400': Merge400<Responses['400']> }
     : Responses & { 400: ValidationErrorResponse }
-
-export type ZodapiRouteConfig = RouteConfig & { alias?: string }
 
 type PathParamNames<T extends string> = T extends `${string}{${infer P}}${infer Rest}`
   ? P | PathParamNames<Rest>
@@ -163,7 +229,22 @@ function assertParamsMatchPath(config: ZodapiRouteConfig): void {
 }
 
 /**
- * `createRoute` from `@hono/zod-openapi` plus zodapi conventions:
+ * Inlined `createRoute` from `@hono/zod-openapi`, so contracts carry no HTTP
+ * dependency. `getRoutingPath` must stay non-enumerable: an enumerable one
+ * leaks the function into `{...route}` spreads and the generated document.
+ */
+function withRoutingPath(config: { path: string } & Record<string, unknown>): unknown {
+  const built = {
+    ...config,
+    getRoutingPath() {
+      return config.path.replaceAll(/\/{(.+?)}/g, '/:$1')
+    },
+  }
+  return Object.defineProperty(built, 'getRoutingPath', { enumerable: false })
+}
+
+/**
+ * A route definition carrying the zodapi conventions:
  * - merges a `400` `ValidationError` response into `responses`, so docs and
  *   client error types include it; a route declaring its own 400 gets the
  *   problem+json content merged into it instead (kept verbatim when it already
@@ -180,8 +261,9 @@ function assertParamsMatchPath(config: ZodapiRouteConfig): void {
  *   input is indistinguishable from `z.number()`)
  * - carries an optional `alias` for zodios-style client method names
  *
- * The result is a plain route object: pass it to `app.openapi(...)` on the
- * server and into `createClient([...])` on the client.
+ * The result is a plain object with a `getRoutingPath()`: pass it to
+ * `app.openapi(...)` on the server and into `createClient([...])` on the
+ * client. Only `zod` is needed to define one.
  */
 export function route<const R extends ZodapiRouteConfig>(
   config: ValidatedRouteConfig<R>,
@@ -203,10 +285,10 @@ export function route(config: ZodapiRouteConfig): unknown {
   if (request?.body && request.body.required === undefined) {
     request = { ...request, body: { ...request.body, required: true } }
   }
-  const built = createRoute({
+  const built = withRoutingPath({
     ...rest,
     ...(request ? { request } : {}),
-    responses: responses as RouteConfig['responses'],
+    responses: responses as ZodapiRouteConfig['responses'],
   })
-  return alias === undefined ? built : Object.assign(built, { alias })
+  return alias === undefined ? built : Object.assign(built as object, { alias })
 }

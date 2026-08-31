@@ -1,5 +1,6 @@
-import { route, z } from '@zodapi/hono'
+import { route } from '@zodapi/core'
 import { describe, expectTypeOf, it } from 'vitest'
+import { z } from 'zod'
 
 const ok = { 200: { description: 'ok' } }
 

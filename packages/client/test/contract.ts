@@ -1,5 +1,7 @@
 import type { RouteDef } from '@zodapi/core'
-import { createApp, queryArray, route, z } from '@zodapi/hono'
+import { queryArray, route } from '@zodapi/core'
+import { createApp } from '@zodapi/hono'
+import { z } from 'zod'
 
 export const Thing = z.object({ id: z.string(), name: z.string() })
 export const NotFound = z.object({
