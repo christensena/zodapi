@@ -59,5 +59,5 @@ export {
   route,
   validationErrorResponse,
 } from './define-route.js'
-export { queryArray } from './query.js'
+export { queryArray, wireBoolean, wireNumber } from './query.js'
 export { schemaContainsCodec } from './codec.js'
