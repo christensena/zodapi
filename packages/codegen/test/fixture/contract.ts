@@ -1,6 +1,7 @@
 // The hand-written comprehensive contract the round-trip test starts from.
 // Every converter feature should appear here at least once.
-import { queryArray, route, z } from '@zodapi/hono'
+import { queryArray, route } from '@zodapi/core'
+import { z } from 'zod'
 
 export const Role = z.enum(['admin', 'member', 'guest']).meta({ id: 'Role' })
 

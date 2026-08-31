@@ -7,12 +7,12 @@ fetch/axios client with optional runtime validation and zodios-style error guard
 
 ## Packages
 
-| Package           | What it is                                                                                                                                                                                                                                                 |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@zodapi/core`    | Contract types, the fixed `ValidationError` 400 problem-details shape, `ApiError` + typed error guards (`isErrorFromRoute`, `matchErrorByStatus`, `isAxiosErrorFromRoute`, ...), pluggable error decoders (`problemDetails`, `decodersFor`). No HTTP deps. |
-| `@zodapi/hono`    | Thin preset over `@hono/zod-openapi`: `createApp()` (fixed 400 shape via `defaultHook`, `a[]=` query normalization) and `route()` (`createRoute` + injected 400 + `body.required` default + `alias`).                                                      |
-| `@zodapi/client`  | `createClient(routes, ...)`: path- or alias-addressed typed calls over fetch (default) or axios (`@zodapi/client/axios`), with `validate: 'none' \| 'request' \| 'response' \| 'both'`.                                                                    |
-| `@zodapi/codegen` | `zodapi-codegen openapi.json -o contract.ts`: generates a zodapi contract (zod schemas + route objects) from an OpenAPI 3.1 document, for backends not written in TypeScript.                                                                              |
+| Package           | What it is                                                                                                                                                                                                                                                                                                                                                                                |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@zodapi/core`    | `route()` (injected 400 + `body.required` default + path/wire-string checks + `alias`), contract types, the fixed `ValidationError` 400 problem-details shape, `ApiError` + typed error guards (`isErrorFromRoute`, `matchErrorByStatus`, `isAxiosErrorFromRoute`, ...), pluggable error decoders (`problemDetails`, `decodersFor`). No HTTP deps — a contract needs only this and `zod`. |
+| `@zodapi/hono`    | Thin preset over `@hono/zod-openapi`: `createApp()` — an `OpenAPIHono` with the fixed 400 shape via `defaultHook` and `a[]=` query normalization. Server-side only; contracts do not import it.                                                                                                                                                                                           |
+| `@zodapi/client`  | `createClient(routes, ...)`: path- or alias-addressed typed calls over fetch (default) or axios (`@zodapi/client/axios`), with `validate: 'none' \| 'request' \| 'response' \| 'both'`.                                                                                                                                                                                                   |
+| `@zodapi/codegen` | `zodapi-codegen openapi.json -o contract.ts`: generates a zodapi contract (zod schemas + route objects) from an OpenAPI 3.1 document, for backends not written in TypeScript.                                                                                                                                                                                                             |
 
 `examples/api` is a shared contract, `examples/app` a runnable server + client demo.
 
@@ -21,7 +21,8 @@ fetch/axios client with optional runtime validation and zodios-style error guard
 Contract (shared):
 
 ```ts
-import { route, z } from '@zodapi/hono'
+import { route } from '@zodapi/core'
+import { z } from 'zod'
 
 export const getUser = route({
   alias: 'getUser',
@@ -126,6 +127,11 @@ OpenAPI 3.0 documents (3.1 only).
 ## Conventions
 
 - **OpenAPI 3.1 only** (`app.doc31`).
+- **Contracts are HTTP-dependency-free.** `route()` lives in `@zodapi/core`, so a package
+  holding the contract depends on `zod` and `@zodapi/core` only — no `hono`, no
+  `@hono/zod-openapi`, and nothing of theirs in a client bundle. Name OpenAPI components
+  with zod's own `.meta({ id: 'User' })`; `.openapi('User')` is a prototype method patched
+  on by importing `@hono/zod-openapi`, which re-couples the contract to hono.
 - **Query arrays** use `a[]=1&a[]=2`. Declare them with `queryArray(item)`; `createApp()` strips the
   `[]` suffix at the edge (its `fetch`), so plain repeated keys work too. The normalization does not
   apply when the app is mounted under another Hono app via `.route()`.
