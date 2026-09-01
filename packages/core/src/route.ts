@@ -3,9 +3,8 @@ import type { z } from 'zod'
 export type Method = 'get' | 'post' | 'put' | 'patch' | 'delete' | 'head' | 'options' | 'trace'
 
 /**
- * Structural shape of a route definition. `createRoute()` from `@hono/zod-openapi`
- * (and the `route()` helper from `@zodapi/hono`) produce objects satisfying this,
- * so contracts can be shared with `@zodapi/client` without importing hono.
+ * Structural shape of a route definition. The `route()` helper produces objects
+ * satisfying this, as does `createRoute()` from `@hono/zod-openapi`.
  */
 export interface RouteRequestDef {
   params?: z.ZodType | undefined

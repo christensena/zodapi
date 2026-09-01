@@ -6,7 +6,8 @@ import { z } from 'zod'
  * Hono's validator hands single-occurrence keys to the schema as a bare string,
  * so this wraps a lone value into a one-element array before `z.array(item)`.
  * The client serialises array values with a `[]` key suffix; `createApp()` from
- * `@zodapi/hono` strips the suffix at the edge so both `a[]=x` and repeated
+ * `createApp()` from `@zodapi/hono` strips the suffix at the edge so both `a[]=x` and
+ * repeated
  * `a=x` forms validate.
  *
  * Item values are raw strings on the wire, so the item schema must accept a

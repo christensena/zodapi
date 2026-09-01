@@ -53,5 +53,11 @@ export {
   problemDetails,
   zodapiValidationDecoder,
 } from './decoders.js'
+export {
+  type ZodapiRoute,
+  type ZodapiRouteConfig,
+  route,
+  validationErrorResponse,
+} from './define-route.js'
 export { queryArray } from './query.js'
 export { schemaContainsCodec } from './codec.js'
