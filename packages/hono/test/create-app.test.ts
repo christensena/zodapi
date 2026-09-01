@@ -88,6 +88,38 @@ describe('createApp()', () => {
     expect(await res.json()).toEqual({ n: 5, b: false })
   })
 
+  it('mounts a route with as-const security/tags and keeps alias out of the document', async () => {
+    // readonly doc arrays must not break app.openapi() assignability — a
+    // failing overload here collapses c.req.valid() to never.
+    const Secured = [{ bearer: [] }] as const
+    const app = createApp()
+      .openapi(
+        route({
+          alias: 'getItem',
+          method: 'get',
+          path: '/items/{id}',
+          request: { params: z.object({ id: z.string() }) },
+          security: Secured,
+          tags: ['items'],
+          responses: {
+            200: { description: 'ok', content: { 'application/json': { schema: Item } } },
+          },
+        }),
+        (c) => c.json({ id: c.req.valid('param').id }, 200),
+      )
+      .doc31('/openapi.json', { openapi: '3.1.0', info: { title: 't', version: '1' } })
+
+    const res = await app.request('/items/abc')
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ id: 'abc' })
+
+    const doc = await (await app.request('/openapi.json')).json()
+    const op = doc.paths['/items/{id}'].get
+    expect(op.security).toEqual([{ bearer: [] }])
+    expect(op.tags).toEqual(['items'])
+    expect(op).not.toHaveProperty('alias')
+  })
+
   it('lets a user-supplied defaultHook win', async () => {
     const app = createApp({
       defaultHook: (result, c) => {
