@@ -135,7 +135,7 @@ describe('route()', () => {
     expect({ ...r }).not.toHaveProperty('getRoutingPath')
   })
 
-  it('carries the alias through', () => {
+  it('carries the alias through, non-enumerable so it stays out of spreads and the document', () => {
     const r = route({
       alias: 'listItems',
       method: 'get',
@@ -143,5 +143,7 @@ describe('route()', () => {
       responses: { 200: { description: 'ok' } },
     })
     expect(r.alias).toBe('listItems')
+    expect(Object.keys(r)).not.toContain('alias')
+    expect({ ...r }).not.toHaveProperty('alias')
   })
 })

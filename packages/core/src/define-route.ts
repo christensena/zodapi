@@ -185,9 +185,17 @@ type ValidatedRouteConfig<R extends ZodapiRouteConfig> = [RouteIssues<R>] extend
   ? R
   : RouteIssues<R>
 
-export type ZodapiRoute<R extends ZodapiRouteConfig> = Omit<R, 'responses'> & {
-  responses: With400<R['responses']>
-} & { getRoutingPath(): ConvertPathType<R['path']> }
+// zod-to-openapi's OperationObject types the documentation arrays as mutable,
+// while route()'s `const` type parameter captures them readonly (from `as
+// const` contracts, or plain inline literals) — write the readonly back off in
+// the built route's type so it stays assignable to `app.openapi(...)`. The
+// runtime value is the same plain array either way.
+type MutableDocKey = 'security' | 'tags' | 'servers' | 'parameters'
+type DeepWritable<T> = T extends object ? { -readonly [K in keyof T]: DeepWritable<T[K]> } : T
+
+export type ZodapiRoute<R extends ZodapiRouteConfig> = {
+  [K in keyof Omit<R, 'responses'>]: K extends MutableDocKey ? DeepWritable<R[K]> : R[K]
+} & { responses: With400<R['responses']> } & { getRoutingPath(): ConvertPathType<R['path']> }
 
 interface ZodObjectDefLike {
   type?: string
@@ -290,5 +298,14 @@ export function route(config: ZodapiRouteConfig): unknown {
     ...(request ? { request } : {}),
     responses: responses as ZodapiRouteConfig['responses'],
   })
-  return alias === undefined ? built : Object.assign(built as object, { alias })
+  // Non-enumerable like getRoutingPath: the doc generator copies enumerable
+  // config keys into the operation object.
+  return alias === undefined
+    ? built
+    : Object.defineProperty(built as object, 'alias', {
+        value: alias,
+        enumerable: false,
+        writable: true,
+        configurable: true,
+      })
 }

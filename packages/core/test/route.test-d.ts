@@ -151,6 +151,18 @@ describe('route() wire string type check', () => {
     })
   })
 
+  it('writes readonly documentation arrays back to mutable in the built route', () => {
+    const r = route({
+      method: 'get',
+      path: '/things',
+      tags: ['things'],
+      security: [{ bearer: [] }] as const,
+      responses: ok,
+    })
+    expectTypeOf(r.tags).toEqualTypeOf<['things']>()
+    expectTypeOf(r.security).toEqualTypeOf<[{ bearer: [] }]>()
+  })
+
   it('collapses the config parameter to just the error object on failure', () => {
     const bad = {
       method: 'get',
