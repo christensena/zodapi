@@ -1,5 +1,69 @@
 # @zodapi/core
 
+## 0.4.0
+
+### Minor Changes
+
+- 3804f0e: Generated contracts now emit `route({ ... })` from `@zodapi/core` instead of a plain object
+  `satisfies RouteDef`, so a contract generated from an OpenAPI document mounts on a `createApp()`
+  server as well as feeding `createClient()` — `app.openapi()` needs the `getRoutingPath()` that
+  `route()` attaches. The `GeneratedRoute` helper type is gone; the operation documentation fields it
+  carried are part of the config `route()` accepts.
+
+  Two consequences of going through `route()`. An operation whose spec declares no `400` now gets the
+  zodapi `ValidationError` response injected, and one that declares its own keeps it with the
+  problem+json content merged alongside — previously the spec's responses were emitted verbatim. And
+  a templated path whose parameter the spec never declares now throws when the generated module is
+  imported, rather than producing a route that 400s on every request.
+
+  Numeric and boolean path and query parameters are wrapped in `wireNumber(...)` / `wireBoolean(...)`
+  so they decode the raw strings the wire delivers; without that, `route()`'s wire-string check
+  rejects them at compile time. These preserve the declared schema, so the document generated from
+  the contract still equals the source document — `z.coerce.number()` and `z.stringbool()` would not
+  (a bare `z.coerce.number()` documents itself as `type: ["number", "null"]`, `z.stringbool()` as
+  `type: "string"`).
+
+  Adds `wireNumber(schema)` and `wireBoolean(schema)` beside `queryArray`: they let a numeric or
+  boolean params/query schema accept the raw string the wire delivers, without altering the schema
+  itself or the OpenAPI document generated from it. Written for `@zodapi/codegen`, which has to
+  reproduce a source specification exactly; a hand-written contract has no such constraint and should
+  keep using `z.coerce.number()` / `z.stringbool()`.
+
+- 60550c5: `route()` now lives here, so a contract depends on `zod` and `@zodapi/core` only.
+
+  It previously came from `@zodapi/hono`, whose `createRoute` import pulled the `@hono/zod-openapi`
+  barrel — `hono`, `@asteasolutions/zod-to-openapi`, `openapi3-ts` and `yaml` — into every package
+  holding a contract. Bundlers that do not tree-shake within modules shipped all of it to clients
+  that never call it, and `sideEffects: false` could not help: the barrel runs
+  `extendZodWithOpenApi(z)` at import time. The eight lines of `createRoute` that `route()` actually
+  used are inlined instead.
+
+  Behaviour is unchanged — the injected `400`, the `body.required` default, the path-param and
+  wire-string checks, and `alias` all work as before, and the emitted OpenAPI document is
+  byte-identical. The result still carries a non-enumerable `getRoutingPath()`, so it drops straight
+  into `app.openapi(...)`.
+
+  Name OpenAPI components with zod's own `.meta({ id: 'User' })`. `.openapi('User')` is a prototype
+  method patched on by importing `@hono/zod-openapi`, so a contract using it stays coupled to hono;
+  both produce the same `$ref`.
+
+  `ZodapiRouteConfig` is now defined in terms of zod types rather than re-exporting hono's
+  `RouteConfig`. The request and response shapes are exact; the OpenAPI documentation fields are
+  typed loosely, and anything they let through is still caught by `app.openapi(...)`. One deliberate
+  narrowing: `method` does not accept OAS 3.2's `'query'`, matching `RouteDef['method']`, which
+  drives the client.
+
+### Patch Changes
+
+- 6d5ef1f: Two fixes from adoption feedback:
+
+  - `alias` is now a non-enumerable property on the built route (like `getRoutingPath`), so it no longer leaks into the generated OpenAPI document. It is still readable as `route.alias` everywhere.
+  - The built route's type writes `readonly` back off the documentation arrays (`security`, `tags`, `servers`, `parameters`). Configs captured readonly — `as const` contract values, or plain inline literals under `route()`'s `const` type parameter — previously made the route unassignable to `app.openapi(...)`, collapsing `c.req.valid()` to `never`.
+
+- 8325e89: `route()` now rejects at compile time params/query value schemas that can never match the wire's raw strings — a bare `z.number()` or `z.boolean()` type-checks but fails validation with a 400 on every request. Use coercing schemas instead: `z.coerce.number()` or `z.stringbool()` (not `z.coerce.boolean()`, whose JS truthiness turns `"false"` into `true`). Don't pass a type argument to `z.coerce.number` here: `z.coerce.number<number>()` narrows the declared input and is structurally identical to `z.number()` at the type level, so it is rejected too. Contracts that trip the new check were already failing every request at runtime.
+
+  `queryArray()` documents that item schemas see raw wire strings and need the same treatment.
+
 ## 0.3.0
 
 ### Minor Changes
