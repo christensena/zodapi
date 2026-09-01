@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { generateContract } from '../src/index.js'
 import { buildDoc } from '../test/fixture/build-doc.js'
 import { routes } from '../test/fixture/contract.js'
+import { foreignDoc } from '../test/fixture/foreign-spec.js'
 
 const doc = buildDoc(routes)
 for (const [file, options] of [
@@ -21,3 +22,7 @@ for (const [file, options] of [
   writeFileSync(out, generateContract(doc, options))
   console.log(`wrote ${out}`)
 }
+
+const foreignOut = fileURLToPath(new URL('../test/fixture/generated-foreign.ts', import.meta.url))
+writeFileSync(foreignOut, generateContract(foreignDoc, { docs: 'meta' }))
+console.log(`wrote ${foreignOut}`)

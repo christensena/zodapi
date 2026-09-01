@@ -271,7 +271,7 @@ describe('generateContract', () => {
         '/things/{id}': { get: { responses: { 200: { description: 'ok' } } } },
       },
     })
-    expect(source).toContain('export const getThingsId = {')
+    expect(source).toContain('export const getThingsId = route({')
     expect(source).not.toContain('alias:')
   })
 })
@@ -339,11 +339,11 @@ describe('docs modes', () => {
     expect(source).toContain('/** Free-text filter */')
     expect(source).toContain('@tags things')
     expect(source).toContain('alias: "listThings"')
-    expect(source).toContain('satisfies RouteDef')
+    expect(source).toContain('export const listThings = route({')
     expect(source).not.toContain('.meta(')
     expect(source).not.toContain('operationId:')
     expect(source).not.toContain('summary:')
-    expect(source).not.toContain('GeneratedRoute')
+    expect(source).not.toContain('satisfies')
   })
 
   it('meta mode keeps runtime metadata, ids, and route doc fields', () => {
@@ -351,7 +351,7 @@ describe('docs modes', () => {
     expect(source).toContain('.meta({ id: "Thing", description: "A thing" })')
     expect(source).toContain('operationId: "listThings"')
     expect(source).toContain('summary: "List things"')
-    expect(source).toContain('satisfies GeneratedRoute')
+    expect(source).toContain('export const listThings = route({')
     expect(source).not.toContain('/** A thing */')
   })
 
