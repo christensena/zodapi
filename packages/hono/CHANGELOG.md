@@ -1,5 +1,43 @@
 # @zodapi/hono
 
+## 0.4.0
+
+### Minor Changes
+
+- 60550c5: `@zodapi/hono` is now server-only: it exports `createApp()` (plus `OpenAPIHono` and `createRoute`
+  from `@hono/zod-openapi`) and nothing else. Contracts no longer import it, so they no longer pull
+  hono into client bundles.
+
+  Everything else it re-exported moved to, or was already in, `@zodapi/core` — import from there
+  instead: `route`, `validationErrorResponse`, `ZodapiRoute`, `ZodapiRouteConfig`, `queryArray`,
+  `ValidationError`, `PROBLEM_JSON_CONTENT_TYPE`, `ZODAPI_VALIDATION_TYPE`.
+
+  The `z` re-export is gone; use `import { z } from 'zod'`. It was `@hono/zod-openapi`'s re-export of
+  the same zod instance, and importing it was enough to drag the whole hono chain into a contract.
+  It also carried the `.openapi()` prototype method — replace `.openapi('User')` with zod's
+  `.meta({ id: 'User' })`, which produces the same component and `$ref`.
+
+  ```diff
+  - import { queryArray, route, z } from '@zodapi/hono'
+  + import { queryArray, route } from '@zodapi/core'
+  + import { z } from 'zod'
+  ```
+
+  The `hono` peer range is now `^4.10.0` rather than `>=4.10.0`: `@zodapi/core` models hono's
+  `RouteConfig` structurally, and an unbounded range let a future major widen it with no signal.
+
+- 8325e89: `route()` now rejects at compile time params/query value schemas that can never match the wire's raw strings — a bare `z.number()` or `z.boolean()` type-checks but fails validation with a 400 on every request. Use coercing schemas instead: `z.coerce.number()` or `z.stringbool()` (not `z.coerce.boolean()`, whose JS truthiness turns `"false"` into `true`). Don't pass a type argument to `z.coerce.number` here: `z.coerce.number<number>()` narrows the declared input and is structurally identical to `z.number()` at the type level, so it is rejected too. Contracts that trip the new check were already failing every request at runtime.
+
+  `queryArray()` documents that item schemas see raw wire strings and need the same treatment.
+
+### Patch Changes
+
+- Updated dependencies [3804f0e]
+- Updated dependencies [60550c5]
+- Updated dependencies [6d5ef1f]
+- Updated dependencies [8325e89]
+  - @zodapi/core@0.4.0
+
 ## 0.3.0
 
 ### Minor Changes
