@@ -15,6 +15,8 @@ that bake in the zodapi conventions while keeping idiomatic Hono (`c.req.valid`,
   validation instead of silently skipping it
 - checks `{...}` path params against the params schema keys — both as a compile-time error and a
   definition-time throw on mismatch
+- rejects at compile time params/query value schemas that can never match the wire's raw strings
+  (see [below](#params-and-query-are-strings-on-the-wire))
 - carries an optional `alias` for zodios-style client method names
 
 ```ts
@@ -44,6 +46,29 @@ it throws a plain `ApiError`, narrowed with the guards like any other declared s
 union of both bodies; `isValidationError` tells them apart) — while a validation failure decodes
 into `ValidationApiError`. A route that declares its own `application/problem+json` 400 content is
 kept fully verbatim.
+
+### Params and query are strings on the wire
+
+Path and query values reach the server as raw strings (repeated query keys as arrays of strings),
+so a bare `z.number()` or `z.boolean()` type-checks but fails validation on every request with a 400. `route()` rejects such schemas at compile time; use coercing schemas instead:
+
+```ts
+query: z.object({
+  limit: z.coerce.number().int().max(100).default(20),
+  exact: z.stringbool().optional(),
+  tags: queryArray(z.string()).optional(),
+})
+```
+
+- `z.coerce.number()` coerces the wire string. Leave the type argument off:
+  `z.coerce.number<number>()` narrows the declared input to `number`, making it indistinguishable
+  from `z.number()` at the type level, so the compile-time check rejects it. `@zodapi/client`
+  callers pass a plain `number` either way — query and params args are typed with the decoded
+  output.
+- `z.stringbool()` parses `"true"`/`"false"` (and friends) into a boolean. Avoid
+  `z.coerce.boolean()`: it applies JS truthiness, so any non-empty string — `"false"` included —
+  coerces to `true`.
+- `queryArray()` items are raw strings too; give it a string-accepting item schema the same way.
 
 ## createApp()
 

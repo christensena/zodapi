@@ -80,8 +80,8 @@ extra wire-side constraints or a `default` inlines the codec with those applied 
 
 Because codecs change parsed values, `@zodapi/client` refuses calls whose validation mode would
 skip a codec-bearing schema (see the client README); pair a dates contract with
-`validate: 'response'` (the default) or `'both'`, and optionally `encodeRequests: true` to pass
-`Date` objects in requests too.
+`validate: 'response'` (the default) or `'both'`. Codec-bearing params and query values always
+take `Date` objects; add `encodeRequests: true` to pass them in request bodies too.
 
 ## Fidelity
 

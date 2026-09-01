@@ -74,6 +74,12 @@ describe('query serialization (a[] convention)', () => {
     const result = await client.listThings({ query: { limit: 1 } })
     expect(result.items).toHaveLength(1)
   })
+
+  it('serializes a decoded stringbool value beside a queryArray and the server accepts it', async () => {
+    const client = makeClient()
+    const result = await client.listThings({ query: { exact: true, tags: ['a'] } })
+    expect(result.tags).toEqual(['a'])
+  })
 })
 
 describe('the fixed 400 validation error shape', () => {
@@ -384,6 +390,18 @@ describe('date codecs', () => {
       .catch((e: unknown) => e)
     expect(err).toBeInstanceOf(RequestValidationError)
     expect(calls).toHaveLength(0)
+  })
+
+  it('always encodes a codec query value to its wire form, per key beside a queryArray', async () => {
+    const { adapter, calls } = stubAdapter(200, [])
+    const client = createClient(codecRoutes, { baseUrl: 'http://test.local', adapter })
+    await client.searchEvents({
+      query: { since: new Date('2024-01-02T00:00:00Z'), tags: ['a'] },
+    })
+    // The date-only codec's wire form, not toISOString's full datetime — and
+    // the queryArray sibling did not make whole-object encoding blow up.
+    expect(calls[0]?.url).toContain('since=2024-01-02&')
+    expect(calls[0]?.url).toContain('tags%5B%5D=a')
   })
 
   it('reports invalid decoded values as RequestValidationError in encode mode', async () => {

@@ -116,7 +116,7 @@ describe('date codec typing', () => {
     expectTypeOf<SuccessData<typeof getEvent>>().toEqualTypeOf<{ id: string; at: Date }>()
   })
 
-  it('request args are wire strings by default, Date with encodeRequests', () => {
+  it('body args are wire strings by default, Date with encodeRequests', () => {
     type InArgs = Parameters<typeof codecClient.createEvent>[0]
     expectTypeOf<{ body: { at: string } }>().toExtend<InArgs>()
     expectTypeOf<{ body: { at: Date } }>().not.toExtend<InArgs>()
@@ -126,13 +126,23 @@ describe('date codec typing', () => {
     expectTypeOf<{ body: { at: string } }>().not.toExtend<EncArgs>()
   })
 
-  it('per-call encodeRequests flips the request value types', () => {
+  it('per-call encodeRequests flips the body value type', () => {
     type InArgs = Parameters<typeof codecClient.createEvent>[0]
     expectTypeOf<{ body: { at: Date }; encodeRequests: true }>().toExtend<InArgs>()
     expectTypeOf<{ body: { at: string }; encodeRequests: true }>().not.toExtend<InArgs>()
 
     type EncArgs = Parameters<typeof encodeClient.createEvent>[0]
     expectTypeOf<{ body: { at: string }; encodeRequests: false }>().toExtend<EncArgs>()
+  })
+
+  it('codec query values are always decoded, in both IO modes', () => {
+    type InArgs = Parameters<typeof codecClient.searchEvents>[0]
+    expectTypeOf<{ query: { since: Date; tags: string[] } }>().toExtend<InArgs>()
+    expectTypeOf<{ query: { since: string } }>().not.toExtend<InArgs>()
+
+    type EncArgs = Parameters<typeof encodeClient.searchEvents>[0]
+    expectTypeOf<{ query: { since: Date; tags: string[] } }>().toExtend<EncArgs>()
+    expectTypeOf<{ query: { since: string } }>().not.toExtend<EncArgs>()
   })
 })
 
@@ -159,10 +169,16 @@ describe('fullResponse typing', () => {
 })
 
 describe('query typing', () => {
-  it('queryArray keeps array input typing', () => {
+  it('query args are decoded values with omittable defaulted keys, in both IO modes', () => {
     expectTypeOf(client.listThings).parameter(0).toExtend<
       | {
-          query?: { limit?: number | undefined; tags?: string | string[] | undefined } | undefined
+          query?:
+            | {
+                limit?: number | undefined
+                exact?: boolean | undefined
+                tags?: string[] | undefined
+              }
+            | undefined
         }
       | undefined
     >()

@@ -26,7 +26,8 @@ export const listThings = route({
   path: '/things',
   request: {
     query: z.object({
-      limit: z.coerce.number<number>().int().min(1).default(10),
+      limit: z.coerce.number().int().min(1).default(10),
+      exact: z.stringbool().optional(),
       tags: queryArray(z.string()).optional(),
     }),
   },
@@ -136,7 +137,24 @@ export const createEvent = {
   },
 } as const satisfies RouteDef
 
-export const codecRoutes = [getEvent, createEvent] as const
+// A codec query param next to a one-way transform (queryArray): the client
+// must encode `since` per key rather than z.encode-ing the whole object.
+export const searchEvents = {
+  alias: 'searchEvents',
+  method: 'get',
+  path: '/events',
+  request: {
+    query: z.object({
+      since: isoDateToDate.optional(),
+      tags: queryArray(z.string()).optional(),
+    }),
+  },
+  responses: {
+    200: { description: 'ok', content: { 'application/json': { schema: z.array(EventItem) } } },
+  },
+} as const satisfies RouteDef
+
+export const codecRoutes = [getEvent, createEvent, searchEvents] as const
 
 export function makeApp(counters: { createCalls: number }) {
   return createApp()

@@ -52,12 +52,12 @@ type ParamSchemaKeys<R extends ZodapiRouteConfig> = R['request'] extends {
     : PathParamNames<R['path']>
   : never
 
-/** `unknown` when the `{...}` path params and the params schema keys agree; an error-shaped type otherwise. */
-type ParamsCheck<R extends ZodapiRouteConfig> = [
+/** `never` when the `{...}` path params and the params schema keys agree; an error-shaped type otherwise. */
+type ParamsIssues<R extends ZodapiRouteConfig> = [
   Exclude<PathParamNames<R['path']>, ParamSchemaKeys<R>>,
 ] extends [never]
   ? [Exclude<ParamSchemaKeys<R>, PathParamNames<R['path']>>] extends [never]
-    ? unknown
+    ? never
     : {
         'params schema declares keys missing from the path': Exclude<
           ParamSchemaKeys<R>,
@@ -70,6 +70,54 @@ type ParamsCheck<R extends ZodapiRouteConfig> = [
         ParamSchemaKeys<R>
       >
     }
+
+// Params and query values reach the server as raw strings (repeated query
+// keys as arrays of strings), so a value schema whose input type admits
+// neither fails validation on every request — bare z.number()/z.boolean()
+// type-check but 400 at runtime. Use z.coerce.number() (input `unknown`) or
+// z.stringbool() instead; z.coerce.number<number>() narrows its input and is
+// structurally identical to z.number(), so it is rejected too. Unknowable
+// inputs (plain z.coerce.number(), z.any()), non-object schemas, and shapes
+// with non-literal keys pass unchecked.
+type NonWireKeys<S> = S extends z.ZodType
+  ? z.input<S> extends Record<string, unknown>
+    ? string extends keyof z.input<S>
+      ? never
+      : {
+          [K in keyof z.input<S>]-?: unknown extends z.input<S>[K]
+            ? never
+            : [Extract<z.input<S>[K], string | readonly string[]>] extends [never]
+              ? K
+              : never
+        }[keyof z.input<S>]
+    : never
+  : never
+
+/** `never` when every params/query value schema can accept a wire string; an error-shaped type otherwise. */
+type WireIssues<R extends ZodapiRouteConfig> = [
+  NonWireKeys<R['request'] extends { params: infer S } ? S : never>,
+] extends [never]
+  ? [NonWireKeys<R['request'] extends { query: infer S } ? S : never>] extends [never]
+    ? never
+    : {
+        'query values that can never match a wire string (use z.coerce.number() or z.stringbool())': NonWireKeys<
+          R['request'] extends { query: infer S } ? S : never
+        >
+      }
+  : {
+      'params values that can never match a wire string (use z.coerce.number() or z.stringbool())': NonWireKeys<
+        R['request'] extends { params: infer S } ? S : never
+      >
+    }
+
+type RouteIssues<R extends ZodapiRouteConfig> = ParamsIssues<R> | WireIssues<R>
+
+// On success the parameter type is R itself; on failure it is only the small
+// error object — keeping the inferred config type out of the failure branch
+// is what keeps route()'s type errors short.
+type ValidatedRouteConfig<R extends ZodapiRouteConfig> = [RouteIssues<R>] extends [never]
+  ? R
+  : RouteIssues<R>
 
 export type ZodapiRoute<R extends ZodapiRouteConfig> = Omit<R, 'responses'> & {
   responses: With400<R['responses']>
@@ -124,12 +172,20 @@ function assertParamsMatchPath(config: ZodapiRouteConfig): void {
  *   `Content-Type` fails validation instead of silently skipping it
  * - checks `{...}` path params against the params schema keys — both as a
  *   compile-time error and a definition-time throw on mismatch
+ * - rejects at compile time params/query value schemas that can never match
+ *   the wire's raw strings — bare `z.number()`/`z.boolean()` type-check but
+ *   400 on every request; use `z.coerce.number()` or `z.stringbool()` (not
+ *   `z.coerce.boolean()`, which coerces any non-empty string — `"false"`
+ *   included — to `true`; not `z.coerce.number<number>()`, whose narrowed
+ *   input is indistinguishable from `z.number()`)
  * - carries an optional `alias` for zodios-style client method names
  *
  * The result is a plain route object: pass it to `app.openapi(...)` on the
  * server and into `createClient([...])` on the client.
  */
-export function route<const R extends ZodapiRouteConfig>(config: R & ParamsCheck<R>): ZodapiRoute<R>
+export function route<const R extends ZodapiRouteConfig>(
+  config: ValidatedRouteConfig<R>,
+): ZodapiRoute<R>
 export function route(config: ZodapiRouteConfig): unknown {
   assertParamsMatchPath(config)
   const { alias, ...rest } = config

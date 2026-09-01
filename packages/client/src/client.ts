@@ -38,15 +38,21 @@ export interface ClientOptions {
    */
   decoders?: readonly ErrorDecoder[]
   /**
-   * Supply request data in decoded (schema output) form — e.g. `Date` objects
-   * where the contract uses date codecs — and let the client encode it to the
-   * wire form with `z.encode`. Request args are then typed with `z.output`
-   * instead of `z.input`. Encoding is a serialization concern, independent of
-   * `validate`: codec-bearing request data is always encoded (and `z.encode`
+   * Supply the request body in decoded (schema output) form — e.g. `Date`
+   * objects where the contract uses date codecs — and let the client encode
+   * it to the wire form with `z.encode`; the body arg is then typed with
+   * `z.output` instead of `z.input`. Off by default; overridable per call.
+   * Encoding is a serialization concern, independent of `validate`:
+   * codec-bearing bodies are encoded whenever this is on (and `z.encode`
    * validates as it encodes, so an invalid value throws
-   * `RequestValidationError` even with `validate: 'none'`). Overridable per
-   * call. Note: `z.encode` rejects one-way transforms, so a schema mixing a
-   * codec with e.g. `queryArray()` cannot be encoded.
+   * `RequestValidationError` even with `validate: 'none'`). Note: `z.encode`
+   * rejects one-way transforms, so a body schema mixing a codec with a
+   * transform cannot be encoded.
+   *
+   * Params, query, and header values are unaffected: the transport turns them
+   * into strings anyway, so they are always supplied decoded and
+   * codec-bearing values are always encoded (per key, so a codec can sit next
+   * to a `queryArray()`).
    */
   encodeRequests?: boolean
   /**
@@ -130,6 +136,13 @@ function jsonBodySchema(route: RouteDef): z.ZodType | undefined {
   return body ? jsonSchemaOfResponse(body) : undefined
 }
 
+/** The shape of a zod object schema, or `undefined` for non-object schemas. */
+function objectShape(schema: z.ZodType): Record<string, z.ZodType> | undefined {
+  const def = (schema as unknown as { _zod?: { def?: { type?: string; shape?: unknown } } })._zod
+    ?.def
+  return def?.type === 'object' && def.shape ? (def.shape as Record<string, z.ZodType>) : undefined
+}
+
 /**
  * With response validation off, a codec-bearing 2xx schema would return wire
  * data (e.g. ISO strings) while the types promise decoded values (`Date`) —
@@ -172,43 +185,76 @@ export function createClient<const Rs extends readonly RouteDef[], const O exten
 
     if (!validateResponse) assertNoCodecInSuccessResponses(route)
 
-    const parseInput = <T>(
-      target: 'param' | 'query' | 'header' | 'json',
-      schema: z.ZodType | undefined,
-      value: T,
-    ): T => {
-      if (!schema) return value
+    const parseBody = <T>(schema: z.ZodType, value: T): T => {
       // The wire form of a codec is its input side, so codec-bearing values
       // need z.encode regardless of the validate mode — JSON.stringify would
       // serialize e.g. a date-only codec's Date as a full datetime.
       if (encodeRequests && schemaContainsCodec(schema)) {
         const encoded = z.safeEncode(schema, value as never)
-        if (!encoded.success) throw new RequestValidationError(target, encoded.error)
+        if (!encoded.success) throw new RequestValidationError('json', encoded.error)
         return encoded.data as T
       }
       if (!validateRequest) return value
       if (schemaContainsCodec(schema)) {
         // Parsing decodes; re-encode so the wire keeps the codec input form.
         const parsed = schema.safeParse(value)
-        if (!parsed.success) throw new RequestValidationError(target, parsed.error)
+        if (!parsed.success) throw new RequestValidationError('json', parsed.error)
         const encoded = z.safeEncode(schema, parsed.data as never)
-        if (!encoded.success) throw new RequestValidationError(target, encoded.error)
+        if (!encoded.success) throw new RequestValidationError('json', encoded.error)
         return encoded.data as T
       }
       const result = schema.safeParse(value)
-      if (!result.success) throw new RequestValidationError(target, result.error)
+      if (!result.success) throw new RequestValidationError('json', result.error)
       return result.data as T
+    }
+
+    // Params, query, and headers are always supplied decoded (the transport
+    // turns them into strings regardless of the IO mode), so codec-bearing
+    // values are always encoded to their wire form — per key when the schema
+    // is an object, so a codec key can sit next to a one-way transform like
+    // queryArray() that z.encode would reject.
+    const encodeWireValues = <T>(
+      target: 'param' | 'query' | 'header',
+      schema: z.ZodType | undefined,
+      value: T,
+    ): T => {
+      if (!schema || value === undefined) return value
+      let out: T = value
+      const shape = objectShape(schema)
+      if (shape && typeof value === 'object' && value !== null && !Array.isArray(value)) {
+        const entries = Object.entries(value as Record<string, unknown>).map(([key, val]) => {
+          const valueSchema = shape[key]
+          if (val === undefined || !valueSchema || !schemaContainsCodec(valueSchema)) {
+            return [key, val] as const
+          }
+          const encoded = z.safeEncode(valueSchema, val as never)
+          if (!encoded.success) throw new RequestValidationError(target, encoded.error)
+          return [key, encoded.data] as const
+        })
+        out = Object.fromEntries(entries) as T
+      } else if (schemaContainsCodec(schema)) {
+        const encoded = z.safeEncode(schema, value as never)
+        if (!encoded.success) throw new RequestValidationError(target, encoded.error)
+        out = encoded.data as T
+      }
+      if (validateRequest) {
+        // The encoded values are the schema's input form, so plain parsing
+        // validates them.
+        const result = schema.safeParse(out)
+        if (!result.success) throw new RequestValidationError(target, result.error)
+      }
+      return out
     }
 
     // Serialization happens once, outside the retry loop: the same input
     // cannot fail differently on a retry, so these errors never reach onError.
     const request = route.request ?? {}
-    const params = parseInput('param', request.params, args.params) as AnyArgs['params']
-    const query = parseInput('query', request.query, args.query) as AnyArgs['query']
+    const params = encodeWireValues('param', request.params, args.params) as AnyArgs['params']
+    const query = encodeWireValues('query', request.query, args.query) as AnyArgs['query']
     const headerSchema = Array.isArray(request.headers) ? undefined : request.headers
-    parseInput('header', headerSchema, args.headers)
+    encodeWireValues('header', headerSchema, args.headers)
     const bodySchema = jsonBodySchema(route)
-    const body = bodySchema !== undefined ? parseInput('json', bodySchema, args.body) : args.body
+    const body = bodySchema !== undefined ? parseBody(bodySchema, args.body) : args.body
     const hasBody = body !== undefined
 
     const attemptOnce = async (): Promise<unknown> => {

@@ -3,7 +3,7 @@ import { queryArray, route } from '@zodapi/hono'
 
 export const User = z
   .object({
-    id: z.string(),
+    id: z.number(),
     name: z.string(),
     email: z.email(),
     tags: z.array(z.string()),
@@ -26,7 +26,7 @@ export const Conflict = z
     error: z.object({
       code: z.literal('CONFLICT'),
       message: z.string(),
-      existingId: z.string(),
+      existingId: z.number(),
     }),
   })
   .openapi('Conflict')
@@ -39,7 +39,10 @@ export const listUsers = route({
   request: {
     query: z.object({
       q: z.string().optional(),
-      limit: z.coerce.number<number>().int().min(1).max(100).default(20),
+      // Query values are strings on the wire: use coercing schemas
+      // (z.stringbool, not z.coerce.boolean — "false" would coerce to true).
+      exact: z.stringbool().optional(),
+      limit: z.coerce.number().int().min(1).max(100).default(20),
       tags: queryArray(z.string()).optional(),
     }),
   },
@@ -60,7 +63,7 @@ export const getUser = route({
   method: 'get',
   path: '/users/{id}',
   request: {
-    params: z.object({ id: z.string().min(1) }),
+    params: z.object({ id: z.coerce.number().int().min(1) }),
   },
   responses: {
     200: {
@@ -98,7 +101,7 @@ export const deleteUser = route({
   method: 'delete',
   path: '/users/{id}',
   request: {
-    params: z.object({ id: z.string().min(1) }),
+    params: z.object({ id: z.coerce.number().int().min(1) }),
   },
   responses: {
     204: { description: 'Deleted' },
