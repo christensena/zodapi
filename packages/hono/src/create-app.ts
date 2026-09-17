@@ -25,8 +25,8 @@ export type CreateAppInit<E extends Env> = ConstructorParameters<typeof Hono>[0]
   OpenAPIHonoOptions<E> & {
     /**
      * Opt in: answer a `ZodError` raised behind a handler as a validation
-     * failure — `true` for the validator's own `400` problem document, or a
-     * function turning it into the app's error type. Applies to the handler
+     * failure — `'validationError'` for the validator's own `400` problem
+     * document, or a function turning it into the app's error type. Applies to the handler
      * given to `onError`, whenever it is registered. See {@link withZodErrors}.
      */
     zodError?: ZodErrorOption

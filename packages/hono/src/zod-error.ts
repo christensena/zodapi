@@ -3,11 +3,11 @@ import type { Context, Env, ErrorHandler } from 'hono'
 import { ZodError } from 'zod'
 
 /**
- * How a `ZodError` raised behind a handler is answered: `true` for the same
- * `400` problem document the request validator returns, or a function turning
- * it into the app's own error, which `onError` then maps as it sees fit.
+ * How a `ZodError` raised behind a handler is answered: `'validationError'` for
+ * the same `400` problem document the request validator returns, or a function
+ * turning it into the app's own error, which `onError` then maps as it sees fit.
  */
-export type ZodErrorOption = true | ((err: ZodError) => unknown)
+export type ZodErrorOption = 'validationError' | ((err: ZodError) => unknown)
 
 /**
  * The request validator's own `400` problem document, built from a `ZodError`
@@ -37,5 +37,7 @@ export const withZodErrors =
   <E extends Env>(option: ZodErrorOption, handler: ErrorHandler<E>): ErrorHandler<E> =>
   (err, c) => {
     if (!(err instanceof ZodError)) return handler(err, c)
-    return option === true ? zodErrorResponse(err, c) : handler(option(err) as Error, c)
+    return option === 'validationError'
+      ? zodErrorResponse(err, c)
+      : handler(option(err) as Error, c)
   }

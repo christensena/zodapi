@@ -24,7 +24,7 @@ const badParse = () => {
 
 describe('zodError option', () => {
   it('answers a stray ZodError with the validator’s own 400 problem document', async () => {
-    const app = createApp({ zodError: true }).openapi(parses, badParse)
+    const app = createApp({ zodError: 'validationError' }).openapi(parses, badParse)
 
     const res = await app.request('/items')
     expect(res.status).toBe(400)
@@ -36,7 +36,7 @@ describe('zodError option', () => {
   })
 
   it('wraps an onError registered after createApp', async () => {
-    const app = createApp({ zodError: true }).openapi(parses, badParse)
+    const app = createApp({ zodError: 'validationError' }).openapi(parses, badParse)
     let seen: unknown = 'never ran'
     app.onError((err, c) => {
       seen = err
@@ -50,7 +50,7 @@ describe('zodError option', () => {
 
   it('hands other errors to the app’s own handler', async () => {
     const boom = new RangeError('boom')
-    const app = createApp({ zodError: true }).openapi(parses, () => {
+    const app = createApp({ zodError: 'validationError' }).openapi(parses, () => {
       throw boom
     })
     let seen: unknown
@@ -94,7 +94,7 @@ describe('zodError option', () => {
   })
 
   it('does not disturb request validation, which still answers 400 on its own', async () => {
-    const app = createApp({ zodError: true }).openapi(
+    const app = createApp({ zodError: 'validationError' }).openapi(
       route({
         method: 'get',
         path: '/items/{id}',
@@ -112,7 +112,7 @@ describe('zodError option', () => {
 
   it('is usable directly on an error handler', async () => {
     const app = createApp().openapi(parses, badParse)
-    app.onError(withZodErrors(true, (_err, c) => c.text('other', 500)))
+    app.onError(withZodErrors('validationError', (_err, c) => c.text('other', 500)))
 
     const res = await app.request('/items')
     expect(res.status).toBe(400)
