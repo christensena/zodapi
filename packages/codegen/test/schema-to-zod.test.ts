@@ -193,6 +193,15 @@ describe('convertSchema', () => {
         ),
       ).toContain('z.iso.datetime({ offset: true }).max(40)')
     })
+
+    it('honours the offset option without date codecs', () => {
+      expect(dcode({ type: 'string', format: 'date-time' }, { offset: true })).toBe(
+        'z.iso.datetime({ offset: true })',
+      )
+      expect(dcode({ type: 'string', format: 'date-time', maxLength: 40 }, { offset: true })).toBe(
+        'z.iso.datetime({ offset: true }).max(40)',
+      )
+    })
   })
 })
 

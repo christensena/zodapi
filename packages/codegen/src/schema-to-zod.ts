@@ -74,11 +74,14 @@ const STRING_FORMATS: Record<string, string> = {
   ipv6: 'z.ipv6()',
 }
 
+/** `format: date-time`, widened to accept a UTC offset when asked. */
+function isoDatetime(dates: DatesOptions | undefined): string {
+  return `z.iso.datetime(${dates?.offset === true ? '{ offset: true }' : ''})`
+}
+
 /** The input-side (wire) schema of a date codec. */
 export function dateCodecInput(kind: DateCodecKind, dates: DatesOptions): string {
-  return kind === 'datetime'
-    ? `z.iso.datetime(${dates.offset ? '{ offset: true }' : ''})`
-    : 'z.iso.date()'
+  return kind === 'datetime' ? isoDatetime(dates) : 'z.iso.date()'
 }
 
 /** decode/encode function source for each date codec kind. */
@@ -122,7 +125,10 @@ function stringExpr(schema: JsonSchema, ctx: ConvertContext): Expr {
     return { code: dateCodecExpr(kind, input), forward: false, defaultHandled }
   }
 
-  let code = (format !== undefined && STRING_FORMATS[format]) || 'z.string()'
+  let code =
+    format === 'date-time'
+      ? isoDatetime(ctx.dates)
+      : (format !== undefined && STRING_FORMATS[format]) || 'z.string()'
   if (typeof schema['minLength'] === 'number') code += `.min(${schema['minLength']})`
   if (typeof schema['maxLength'] === 'number') code += `.max(${schema['maxLength']})`
   if (typeof schema['pattern'] === 'string' && (format === undefined || !STRING_FORMATS[format])) {
