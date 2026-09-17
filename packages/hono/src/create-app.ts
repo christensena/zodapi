@@ -1,6 +1,9 @@
 import { OpenAPIHono, type OpenAPIHonoOptions } from '@hono/zod-openapi'
 import { PROBLEM_JSON_CONTENT_TYPE, validationErrorBody } from '@zodapi/core'
 import type { Env, Hono } from 'hono'
+import { ZodError } from 'zod'
+
+import { withZodErrors, type ZodErrorOption, zodErrorResponse } from './zod-error.js'
 
 /**
  * Rewrites `a[]=1&a[]=2` query keys to `a=1&a=2` at the edge so contract
@@ -19,7 +22,15 @@ function normalizeBracketQuery(request: Request): Request {
 }
 
 export type CreateAppInit<E extends Env> = ConstructorParameters<typeof Hono>[0] &
-  OpenAPIHonoOptions<E>
+  OpenAPIHonoOptions<E> & {
+    /**
+     * Opt in: answer a `ZodError` raised behind a handler as a validation
+     * failure — `true` for the validator's own `400` problem document, or a
+     * function turning it into the app's error type. Applies to the handler
+     * given to `onError`, whenever it is registered. See {@link withZodErrors}.
+     */
+    zodError?: ZodErrorOption
+  }
 
 /**
  * An `OpenAPIHono` whose validation failures respond `400` with the fixed
@@ -30,8 +41,9 @@ export type CreateAppInit<E extends Env> = ConstructorParameters<typeof Hono>[0]
  * does not apply when the app is mounted under another Hono app via `.route()`.
  */
 export function createApp<E extends Env = Env>(init?: CreateAppInit<E>): OpenAPIHono<E> {
+  const { zodError, ...honoInit } = init ?? {}
   const app = new OpenAPIHono<E>({
-    ...init,
+    ...honoInit,
     defaultHook:
       init?.defaultHook ??
       ((result, c) => {
@@ -42,6 +54,15 @@ export function createApp<E extends Env = Env>(init?: CreateAppInit<E>): OpenAPI
         }
       }),
   })
+  if (zodError) {
+    // hono keeps a single error handler, so wrap whichever one is registered
+    // later rather than installing our own and being replaced by it.
+    const register = app.onError.bind(app)
+    register((err, c) =>
+      err instanceof ZodError ? zodErrorResponse(err, c) : c.text('Internal Server Error', 500),
+    )
+    app.onError = (handler) => register(withZodErrors<E>(zodError, handler))
+  }
   const originalFetch = app.fetch
   app.fetch = (request, ...rest) => originalFetch(normalizeBracketQuery(request), ...rest)
   return app
