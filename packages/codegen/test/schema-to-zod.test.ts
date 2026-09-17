@@ -137,6 +137,12 @@ describe('convertSchema', () => {
     expect(() => code({ type: 'file' })).toThrow('unsupported schema type')
   })
 
+  // z.uuid() also checks the version and variant bits, which real identity
+  // providers do not always honour.
+  it('converts format: uuid to a shape-only z.guid()', () => {
+    expect(code({ type: 'string', format: 'uuid' })).toBe('z.guid()')
+  })
+
   describe('dates options', () => {
     const datesCtx = (dates: ConvertContext['dates']): ConvertContext => ({
       ...ctx,

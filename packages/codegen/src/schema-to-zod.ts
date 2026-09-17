@@ -63,7 +63,10 @@ function json(value: unknown): string {
 
 const STRING_FORMATS: Record<string, string> = {
   email: 'z.email()',
-  uuid: 'z.uuid()',
+  // `z.guid()`, not `z.uuid()`: OpenAPI's `uuid` format means UUID-shaped, and real
+  // identity providers (Cognito among them) mint ids whose variant bits RFC 9562
+  // rejects. Validating those bits fails on live data without catching a real fault.
+  uuid: 'z.guid()',
   url: 'z.url()',
   uri: 'z.url()',
   'date-time': 'z.iso.datetime()',

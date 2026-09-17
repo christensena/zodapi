@@ -7,7 +7,7 @@ export const Role = z.enum(['admin', 'member', 'guest']).meta({ id: 'Role' })
 
 export const User = z
   .object({
-    id: z.uuid(),
+    id: z.guid(),
     email: z.email(),
     name: z.string().min(1).max(100),
     age: z.int().min(0).max(150).optional(),
@@ -42,7 +42,7 @@ export const UserCreated = z
   .object({ type: z.literal('user.created'), user: User })
   .meta({ id: 'UserCreated' })
 export const UserDeleted = z
-  .object({ type: z.literal('user.deleted'), userId: z.uuid() })
+  .object({ type: z.literal('user.deleted'), userId: z.guid() })
   .meta({ id: 'UserDeleted' })
 export const Event = z.discriminatedUnion('type', [UserCreated, UserDeleted]).meta({ id: 'Event' })
 
@@ -70,7 +70,7 @@ export const getUser = route({
   summary: 'Fetch one user',
   tags: ['users'],
   request: {
-    params: z.object({ id: z.uuid() }),
+    params: z.object({ id: z.guid() }),
     headers: z.object({ 'x-request-id': z.string().optional() }),
   },
   responses: {
@@ -147,7 +147,7 @@ export const deleteUser = route({
   method: 'delete',
   path: '/users/{id}',
   request: {
-    params: z.object({ id: z.uuid() }),
+    params: z.object({ id: z.guid() }),
     cookies: z.object({ session: z.string() }),
   },
   responses: {
