@@ -12,13 +12,9 @@ export type JsonSchema = Record<string, unknown>
 export interface DatesOptions {
   /** `format: date-time` → `z.codec(z.iso.datetime(), z.date(), ...)`. */
   datetime?: boolean
-  /** `format: date` → a codec decoding to `Date` at UTC midnight. */
-  date?: boolean
   /** Accept UTC offsets in date-time values (`z.iso.datetime({ offset: true })`). */
   offset?: boolean
 }
-
-export type DateCodecKind = 'datetime' | 'date'
 
 /**
  * How OpenAPI documentation keywords (`title`, `description`, `examples`,
@@ -35,8 +31,8 @@ export interface ConvertContext {
   resolveComponentSchema(ref: string): JsonSchema | undefined
   /** Date-codec conversion options; absent → ISO strings stay strings. */
   dates?: DatesOptions | undefined
-  /** Identifier of the shared date codec for `kind`, registering it as used. */
-  dateCodec?: ((kind: DateCodecKind) => string) | undefined
+  /** Identifier of the shared date-time codec, registering it as used. */
+  dateCodec?: (() => string) | undefined
   /** Documentation output mode; absent → `'meta'`. */
   docs?: DocsMode | undefined
 }
@@ -82,40 +78,27 @@ function isoDatetime(dates: DatesOptions | undefined): string {
   return `z.iso.datetime(${dates?.offset === true ? '{ offset: true }' : ''})`
 }
 
-/** The input-side (wire) schema of a date codec. */
-export function dateCodecInput(kind: DateCodecKind, dates: DatesOptions): string {
-  return kind === 'datetime' ? isoDatetime(dates) : 'z.iso.date()'
+/** The input-side (wire) schema of the date-time codec. */
+export function dateCodecInput(dates: DatesOptions): string {
+  return isoDatetime(dates)
 }
 
-/** decode/encode function source for each date codec kind. */
-export const DATE_CODEC_FNS: Record<DateCodecKind, { decode: string; encode: string }> = {
-  datetime: {
-    decode: '(value) => new Date(value)',
-    encode: '(date) => date.toISOString()',
-  },
-  date: {
-    decode: '(value) => new Date(`${value}T00:00:00Z`)',
-    encode: '(date) => date.toISOString().slice(0, 10)',
-  },
+/** decode/encode function source for the date-time codec. */
+export const DATE_CODEC_FNS = {
+  decode: '(value) => new Date(value)',
+  encode: '(date) => date.toISOString()',
 }
 
-function dateCodecExpr(kind: DateCodecKind, input: string): string {
-  const fns = DATE_CODEC_FNS[kind]
-  return `z.codec(${input}, z.date(), { decode: ${fns.decode}, encode: ${fns.encode} })`
+function dateCodecExpr(input: string): string {
+  return `z.codec(${input}, z.date(), { decode: ${DATE_CODEC_FNS.decode}, encode: ${DATE_CODEC_FNS.encode} })`
 }
 
 function stringExpr(schema: JsonSchema, ctx: ConvertContext): Expr {
   const format = typeof schema['format'] === 'string' ? schema['format'] : undefined
-  const kind: DateCodecKind | undefined =
-    format === 'date-time' && ctx.dates?.datetime === true
-      ? 'datetime'
-      : format === 'date' && ctx.dates?.date === true
-        ? 'date'
-        : undefined
-  if (kind !== undefined && ctx.dateCodec !== undefined) {
+  if (format === 'date-time' && ctx.dates?.datetime === true && ctx.dateCodec !== undefined) {
     // Constraints and `default` belong to the codec's input (wire) side; the
     // shared helper covers the bare case, anything else inlines the codec.
-    const bare = dateCodecInput(kind, ctx.dates ?? {})
+    const bare = dateCodecInput(ctx.dates ?? {})
     let input = bare
     if (typeof schema['minLength'] === 'number') input += `.min(${schema['minLength']})`
     if (typeof schema['maxLength'] === 'number') input += `.max(${schema['maxLength']})`
@@ -124,8 +107,8 @@ function stringExpr(schema: JsonSchema, ctx: ConvertContext): Expr {
       input += `.default(${json(schema['default'])})`
       defaultHandled = true
     }
-    if (input === bare) return { code: ctx.dateCodec(kind), forward: false }
-    return { code: dateCodecExpr(kind, input), forward: false, defaultHandled }
+    if (input === bare) return { code: ctx.dateCodec(), forward: false }
+    return { code: dateCodecExpr(input), forward: false, defaultHandled }
   }
 
   let code =

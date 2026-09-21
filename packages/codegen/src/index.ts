@@ -7,7 +7,6 @@ export {
 export {
   convertSchema,
   type ConvertContext,
-  type DateCodecKind,
   type DatesOptions,
   type DocsMode,
   type Expr,

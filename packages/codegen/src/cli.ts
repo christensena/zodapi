@@ -10,7 +10,7 @@ function fail(message: string): never {
 }
 
 const USAGE =
-  'Usage: zodapi-codegen <openapi.json> [-o contract.ts] [--docs jsdoc|meta|none] [--export-types] [--dates-datetime] [--dates-date] [--dates-offset]'
+  'Usage: zodapi-codegen <openapi.json> [-o contract.ts] [--docs jsdoc|meta|none] [--export-types] [--dates-datetime] [--dates-offset]'
 
 const DOCS_MODES: readonly DocsMode[] = ['meta', 'jsdoc', 'none']
 
@@ -34,8 +34,6 @@ for (let i = 0; i < args.length; i++) {
     exportTypes = true
   } else if (arg === '--dates-datetime') {
     dates.datetime = true
-  } else if (arg === '--dates-date') {
-    dates.date = true
   } else if (arg === '--dates-offset') {
     dates.offset = true
   } else if (arg === '-h' || arg === '--help') {

@@ -13,10 +13,7 @@ const doc = buildDoc(routes)
 for (const [file, options] of [
   ['generated.ts', undefined],
   ['generated-meta.ts', { docs: 'meta' }],
-  [
-    'generated-dates.ts',
-    { dates: { datetime: true, date: true }, exportTypes: true, docs: 'meta' },
-  ],
+  ['generated-dates.ts', { dates: { datetime: true }, exportTypes: true, docs: 'meta' }],
 ] as const) {
   const out = fileURLToPath(new URL(`../test/fixture/${file}`, import.meta.url))
   writeFileSync(out, generateContract(doc, options))
