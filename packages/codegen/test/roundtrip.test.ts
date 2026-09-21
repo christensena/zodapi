@@ -45,7 +45,7 @@ describe('round trip', () => {
   it('generated-dates.ts is up to date (pnpm --filter @zodapi/codegen generate:fixture)', () => {
     expect(fixture('generated-dates.ts')).toBe(
       generateContract(docA, {
-        dates: { datetime: true, date: true },
+        dates: { datetime: true },
         exportTypes: true,
         docs: 'meta',
       }),

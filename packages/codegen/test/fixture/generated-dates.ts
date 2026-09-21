@@ -6,11 +6,6 @@ export const isoDatetimeToDate = z.codec(z.iso.datetime(), z.date(), {
   encode: (date) => date.toISOString(),
 })
 
-export const isoDateToDate = z.codec(z.iso.date(), z.date(), {
-  decode: (value) => new Date(`${value}T00:00:00Z`),
-  encode: (date) => date.toISOString().slice(0, 10),
-})
-
 export const Role = z.enum(["admin", "member", "guest"]).meta({ id: "Role" })
 export type Role = z.infer<typeof Role>
 
@@ -24,7 +19,7 @@ export const User = z.object({
   role: Role,
   website: z.url().optional(),
   createdAt: isoDatetimeToDate,
-  birthDate: isoDateToDate.optional(),
+  birthDate: z.iso.date().optional(),
   tags: z.array(z.string()).min(1).max(10),
 }).meta({ id: "User", description: "A registered user" })
 export type User = z.infer<typeof User>

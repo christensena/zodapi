@@ -147,23 +147,20 @@ describe('convertSchema', () => {
     const datesCtx = (dates: ConvertContext['dates']): ConvertContext => ({
       ...ctx,
       dates,
-      dateCodec: (kind) => (kind === 'datetime' ? 'isoDatetimeToDate' : 'isoDateToDate'),
+      dateCodec: () => 'isoDatetimeToDate',
     })
     const dcode = (schema: unknown, dates: ConvertContext['dates']): string =>
       convertSchema(schema, datesCtx(dates)).code
 
-    it('uses the shared codec for a bare date-time / date', () => {
+    it('uses the shared codec for a bare date-time', () => {
       expect(dcode({ type: 'string', format: 'date-time' }, { datetime: true })).toBe(
         'isoDatetimeToDate',
       )
-      expect(dcode({ type: 'string', format: 'date' }, { date: true })).toBe('isoDateToDate')
     })
 
-    it('leaves formats alone when their option is off', () => {
+    it('leaves date-time alone when the option is off, and date always', () => {
       expect(dcode({ type: 'string', format: 'date' }, { datetime: true })).toBe('z.iso.date()')
-      expect(dcode({ type: 'string', format: 'date-time' }, { date: true })).toBe(
-        'z.iso.datetime()',
-      )
+      expect(dcode({ type: 'string', format: 'date-time' }, {})).toBe('z.iso.datetime()')
     })
 
     it('inlines the codec when constraints apply to the wire side', () => {
@@ -254,12 +251,11 @@ describe('generateContract', () => {
       },
     })
     const withDatetime = generateContract(doc({ type: 'string', format: 'date-time' }), {
-      dates: { datetime: true, date: true, offset: true },
+      dates: { datetime: true, offset: true },
     })
     expect(withDatetime).toContain(
       'export const isoDatetimeToDate = z.codec(z.iso.datetime({ offset: true }), z.date(), {',
     )
-    expect(withDatetime).not.toContain('isoDateToDate')
 
     const withoutDates = generateContract(doc({ type: 'string', format: 'date-time' }))
     expect(withoutDates).toContain('z.iso.datetime()')
