@@ -102,6 +102,30 @@ const client = createClient(routes, { baseUrl, adapter: axiosAdapter(axios.creat
 `isAxiosErrorFromRoute(route, err)` recognises declared error responses on a raw `AxiosError`
 (zodios `isErrorFromPath` equivalent) for code not using the zodapi client.
 
+## Philosophy
+
+The contract is checked twice per call, once on each side, and each side checks the other's work:
+
+1. The client sends the wire form. Bodies are wire-form by default; codec-bearing params, query and
+   headers are always `z.encode`d, as is a body under `encodeRequests`.
+2. The server validates the request against the contract. A codec decodes as part of that parse,
+   so the handler sees `Date` where the contract says so.
+3. The handler answers and Hono serialises the value with `JSON.stringify`. Nothing on the way out
+   runs the contract.
+4. The client validates the response against the contract. A codec decodes as part of that parse,
+   so the caller sees `Date`.
+
+Decoding is parsing. There is no separate "convert without validating" step, so `@zodapi/client`
+refuses a `validate` mode that would skip a codec-bearing 2xx schema rather than return wire
+strings the types call `Date`.
+
+Step 3 sets the rule for codecs. Because the server never encodes, a codec is only sound when its
+`encode` produces exactly what `JSON.stringify` produces for its output type. `Date` passes —
+`toJSON()` and `toISOString()` agree — which is why `@zodapi/codegen` offers a date-time codec
+and nothing else. A date-only codec (`Date` ↔ `YYYY-MM-DD`) fails it, since `JSON.stringify` still
+emits the full timestamp; it becomes sound once the output type is `Temporal.PlainDate`, whose
+`toJSON()` is the date string.
+
 ## Non-TypeScript backends
 
 When the server is not written in TypeScript, generate the contract from its OpenAPI 3.1 document
@@ -151,7 +175,8 @@ OpenAPI 3.0 documents (3.1 only).
   `ApiError` like any other declared status. Client-side validation failures throw `RequestValidationError` /
   `ResponseValidationError`.
 - **Validation default** is `'response'` (2xx bodies parsed with the contract schema; error bodies
-  are checked by the guards instead).
+  are checked by the guards instead). See [Philosophy](#philosophy) for why the server validates
+  requests and the client validates responses.
 - `request.body.required` defaults to `true` so a missing/mismatched `Content-Type` is a 400, not a
   silently skipped validation.
 

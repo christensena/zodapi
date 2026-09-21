@@ -76,7 +76,9 @@ createClient(routes, {
   when response validation runs, so the client fails fast — before sending — when a 2xx response
   schema with a codec would be skipped (`validate` must be `'response'` or `'both'`). In the
   default body mode, validated codec-bearing bodies are re-encoded to their wire form (a
-  date-only codec stays `YYYY-MM-DD` instead of being `JSON.stringify`'d as a full datetime).
+  date-only codec stays `YYYY-MM-DD` instead of being `JSON.stringify`'d as a full datetime). The
+  [Philosophy](../../README.md#philosophy) section of the root README explains why decoding rides on
+  validation.
 - **Raw response access** goes through `fullResponse` (client-level default, or per call in either
   direction): the call resolves with `{ data, status, headers }` — `data` validated/decoded exactly
   as without the envelope, `headers` the raw `Headers` — for pagination headers, tests, and the
